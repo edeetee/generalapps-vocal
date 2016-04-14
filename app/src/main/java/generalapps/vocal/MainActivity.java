@@ -47,19 +47,11 @@ public class MainActivity extends ActionBarActivity {
         button.setOnClickListener(new Button.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Button button = (Button)v;
-
-                if(!recorder.recording){
+                if(!recorder.isRecording()){
                     recorder.record();
                 } else {
                     recorder.stop();
-
-                    Audio audio = recorder.getAudio();
-                    MusicAdapter adapter = (MusicAdapter)((ListView) findViewById(R.id.mainListView)).getAdapter();
-                    adapter.add(audio);
                 }
-
-                button.setText(recorder.recording ? "Stop" : "Record");
             }
         });
 

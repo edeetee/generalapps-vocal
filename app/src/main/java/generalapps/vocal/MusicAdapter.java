@@ -6,6 +6,7 @@ import android.support.v4.content.ContextCompat;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import java.util.ArrayList;
@@ -58,6 +59,11 @@ public class MusicAdapter extends BaseAdapter {
         Audio audio = audios.get(position);
         textView.setText(audio.name);
         textView.setBackgroundColor( audio.isPlaying() ? Color.RED : Color.GRAY );
+
+        ProgressBar progressBar = (ProgressBar)convertView.findViewById(R.id.progressBar);
+        progressBar.setMax(audio.maxBeats);
+
+        audio.view = convertView;
 
         return convertView;
     }
