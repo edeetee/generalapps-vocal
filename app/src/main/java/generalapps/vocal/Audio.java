@@ -5,6 +5,7 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 import android.media.MediaPlayer;
+import android.util.Log;
 import android.view.View;
 import android.widget.ProgressBar;
 
@@ -22,6 +23,7 @@ public class Audio extends AudioTrack {
     int maxBeats;
     int beats;
     View view;
+    boolean enabled = true;
 
     public Audio(int maxBeats, String name){
         super(AudioManager.STREAM_MUSIC, 44100, AudioFormat.CHANNEL_OUT_DEFAULT, AudioFormat.ENCODING_PCM_16BIT, 500000, AudioTrack.MODE_STATIC);
@@ -43,8 +45,9 @@ public class Audio extends AudioTrack {
         });
     }
 
-    public Audio(int maxBeats, String name, String audioFile){
-        this(maxBeats, name);
+    public Audio(String name, String audioFile){
+        //TODO implement actual maxBeats storage
+        this(Rhythm.totalBeats(), name);
         setFile(audioFile);
     }
 
@@ -77,12 +80,38 @@ public class Audio extends AudioTrack {
         return getPlayState() == PLAYSTATE_PLAYING;
     }
 
+    public boolean canPlay(){
+        return enabled && file != null;
+    }
+
     public void PlayStop(){
-        if(file != null){
+        if(canPlay()){
             if(isPlaying()){
                 stop();
             } else
                 play();
         }
+    }
+
+    @Override
+    public void play() throws IllegalStateException {
+        if(canPlay())
+            super.play();
+        else
+            Log.w("'Hol up", "Audio name:" + name + " is not loaded and/or enabled");
+    }
+
+    @Override
+    public void stop() throws IllegalStateException {
+        if(isPlaying())
+            super.stop();
+        else
+            Log.w("Too keen", "Audio name:" + name + " is already playing");
+    }
+
+    public void delete(){
+        stop();
+        release();
+        new File(file).delete();
     }
 }

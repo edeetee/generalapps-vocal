@@ -30,36 +30,29 @@ public class Recorder {
     TimerTask toneTask;
     Thread recordingThread;
     String fileName;
-    long bpm;
-    int bpb;
-    int bars;
     Activity context;
     Audio audio;
-
     int buffer;
+    int FREQ = 44100;
 
     public Recorder(Activity context){
         this.context = context;
 
         toneTimer = new Timer();
-        toneGenerator = new ToneGenerator(AudioManager.STREAM_MUSIC, 50);
-
-        bpm = 100;
-        bpb = 4;
-        bars = 1;
+        toneGenerator = new ToneGenerator(AudioManager.STREAM_MUSIC, 20);
     }
 
     public void record(){
         String timeString = new SimpleDateFormat("HH_mm_ss").format(Calendar.getInstance().getTime());
-        fileName = context.getFilesDir() + "/recording_" + timeString + ".wav";
+        fileName = context.getFilesDir() + "/audios/recording_" + timeString + ".wav";
 
         MusicAdapter adapter = (MusicAdapter)((ListView) context.findViewById(R.id.mainListView)).getAdapter();
-        audio = new Audio(bars*bpb, timeString);
+        audio = new Audio(Rhythm.totalBeats(), timeString);
         adapter.add(audio);
 
         buffer = AudioRecord.getMinBufferSize(44100, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
         recorder = new AudioRecord(MediaRecorder.AudioSource.MIC,
-                44100,
+                FREQ,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
                 buffer);
@@ -76,21 +69,23 @@ public class Recorder {
         toneTask = new TimerTask() {
             @Override
             public void run() {
-                context.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        toneGenerator.startTone(audio.beats%bpb == 0 ? ToneGenerator.TONE_DTMF_6 : ToneGenerator.TONE_DTMF_1, 100);
-                        audio.beats++;
+            context.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                audio.beats++;
 
-                        ProgressBar progressBar = (ProgressBar)audio.view.findViewById(R.id.progressBar);
-                        progressBar.setProgress(audio.beats);
+                if(audio.maxBeats+1 <= audio.beats){
+                    stop();
+                    return;
+                }
 
-                        if(audio.maxBeats <= audio.beats)
-                            stop();
-                    }
-                });
+                ProgressBar progressBar = (ProgressBar)audio.view.findViewById(R.id.progressBar);
+                progressBar.setProgress(audio.beats);
 
-            } };
+                toneGenerator.startTone(Rhythm.posInBar(audio.beats) == 0 ? ToneGenerator.TONE_DTMF_6 : ToneGenerator.TONE_DTMF_1, 100);
+                }
+            });
+        } };
 
         updateButton();
     }
@@ -107,14 +102,18 @@ public class Recorder {
             e.printStackTrace();
         }
         boolean first = true;
-        while (isRecording()) {
+        boolean last = false;
+        int count = 0;
+        long countAim = (60*Rhythm.bpb*FREQ)/Rhythm.bpm;
+        while (count < countAim) { //isRecording() || last
             // gets the voice output from microphone to byte format
 
             recorder.read(sData, 0, buffer/2);
+            count += buffer/2;
 
             if(first) {
                 first = false;
-                toneTimer.scheduleAtFixedRate(toneTask, 0, 1000*60/bpm);
+                toneTimer.scheduleAtFixedRate(toneTask, 0, Rhythm.msBeatPeriod());
                 continue;
             }
 
@@ -126,12 +125,19 @@ public class Recorder {
             } catch (IOException e) {
                 e.printStackTrace();
             }
+
+            if(last)
+                last = false;
+            if(isRecording())
+                last = true;
         }
         try {
             os.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
+        recorder.stop();
+        recorder.release();
     }
 
     private byte[] short2byte(short[] sData) {
@@ -146,14 +152,14 @@ public class Recorder {
     }
 
     public void stop(){
-        recorder.stop();
-        recorder.release();
+        //recorder.stop();
+        toneTask.cancel();
 
+        //recorder.release();
         audio.setFile(fileName);
+
         audio = null;
         recordingThread = null;
-
-        toneTask.cancel();
         toneTask = null;
         updateButton();
     }
