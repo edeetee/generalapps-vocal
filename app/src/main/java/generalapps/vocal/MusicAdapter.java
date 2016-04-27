@@ -2,20 +2,19 @@ package generalapps.vocal;
 
 import android.app.Activity;
 import android.graphics.Color;
-import android.support.v4.content.ContextCompat;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
-import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.Button;
-import android.widget.LinearLayout;
 import android.widget.ListView;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Timer;
 import java.util.TimerTask;
 
 /**
@@ -25,6 +24,10 @@ public class MusicAdapter extends BaseAdapter {
 
     List<Audio> audios;
     Activity context;
+    boolean playing = false;
+    int beats = 0;
+    ToneGenerator toneGenerator = new ToneGenerator(AudioManager.STREAM_MUSIC, 20);
+    Timer timer = new Timer();
 
     View.OnClickListener infoClick = new View.OnClickListener() {
         @Override
@@ -56,6 +59,54 @@ public class MusicAdapter extends BaseAdapter {
     public void add(Audio audio){
         audios.add(audio);
         notifyDataSetChanged();
+    }
+
+    public void play(){
+        if(playing)
+            return;
+
+        playing = true;
+        for(Audio audio : audios){
+            audio.play();
+        }
+
+        beats = 0;
+        timer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                beats++;
+                updateAudios();
+                if(!playing)
+                    cancel();
+            }
+        }, Rhythm.msBeatPeriod(), Rhythm.msBeatPeriod());
+    }
+
+    public void updateAudios(){
+        for(Audio audio : audios){
+            if(audio.canPlay()){
+                if(beats % (audio.bars*Rhythm.bpb) == 0){
+                    audio.restart();
+                }
+            }
+        }
+        context.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                notifyDataSetInvalidated();
+            }
+        });
+    }
+
+    public void stop(){
+        if(!playing)
+            return;
+
+        playing = false;
+        beats = 0;
+        for(Audio audio : audios){
+            audio.stop();
+        }
     }
 
     public void delete(int pos){
@@ -90,20 +141,27 @@ public class MusicAdapter extends BaseAdapter {
             convertView = context.getLayoutInflater().inflate(R.layout.audio_list_view, parent, false);
         }
 
-        TextView textView = (TextView)convertView.findViewById(R.id.name);
         Audio audio = audios.get(position);
-        textView.setText(audio.name);
+        if(audio.adapter != this)
+            audio.adapter = this;
+        audio.view = convertView;
 
-        LinearLayout info = (LinearLayout)convertView.findViewById(R.id.info);
+        audio.setName();
+
+        TextView info = (TextView)convertView.findViewById(R.id.name);
         info.setOnClickListener(infoClick);
 
         Button delete = (Button)convertView.findViewById(R.id.delete);
         delete.setOnClickListener(deleteClick);
 
-        ProgressBar progressBar = (ProgressBar)convertView.findViewById(R.id.progressBar);
-        progressBar.setMax(audio.maxBeats);
+        if(audio.waveValues != null){
+            WaveView waveView = (WaveView)convertView.findViewById(R.id.waveform);
+            waveView.points = audio.waveValues;
+            waveView.invalidate();
+        }
 
-        audio.view = convertView;
+        audio.setBars();
+
 
         return convertView;
     }

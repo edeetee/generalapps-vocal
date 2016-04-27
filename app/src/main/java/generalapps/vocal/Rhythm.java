@@ -4,9 +4,11 @@ package generalapps.vocal;
  * Created by edeetee on 19/04/2016.
  */
 public final class Rhythm {
-    public static int bpm = 100;
+    public static int bpm;
+    //TODO remove bars
+    public static int bars;
+    public static int maxBars = 4;
     public static int bpb = 4;
-    public static int bars = 1;
 
     public static int totalBeats(){
         return bpb*bars;

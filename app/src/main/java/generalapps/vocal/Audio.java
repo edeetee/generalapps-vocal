@@ -5,32 +5,43 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 import android.media.MediaPlayer;
+import android.util.JsonReader;
 import android.util.Log;
 import android.view.View;
+import android.widget.Adapter;
 import android.widget.ProgressBar;
+import android.widget.TextView;
+
+import org.json.JSONException;
 
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by edeetee on 13/04/2016.
  */
 public class Audio extends AudioTrack {
+    AudioTrack track;
     String name;
-    private String file;
+    private File audioFile;
+    private File metaData;
+    int bpm;
+    int bars = 0;
     int maxBeats;
-    int beats;
+
+    List<Float> waveValues;
+
     View view;
+    MusicAdapter adapter;
     boolean enabled = true;
 
-    public Audio(int maxBeats, String name){
+    public Audio(){
         super(AudioManager.STREAM_MUSIC, 44100, AudioFormat.CHANNEL_OUT_DEFAULT, AudioFormat.ENCODING_PCM_16BIT, 500000, AudioTrack.MODE_STATIC);
-
-        this.name = name;
-        beats = 0;
-        this.maxBeats = maxBeats;
 
         setPlaybackPositionUpdateListener(new OnPlaybackPositionUpdateListener() {
             @Override
@@ -45,28 +56,93 @@ public class Audio extends AudioTrack {
         });
     }
 
-    public Audio(String name, String audioFile){
-        //TODO implement actual maxBeats storage
-        this(Rhythm.totalBeats(), name);
-        setFile(audioFile);
+    public Audio(File metaData){
+        this();
+        setMetaData(metaData);
     }
 
-    public void setFile(String audioFile){
-        file = audioFile;
-        File file= new File(audioFile);
-        int length = (int)file.length();
+    public Audio(File audio, File metaData){
+        this(metaData);
+        setFile(audio);
+    }
+
+    public void setName(){
+        if(view != null){
+            TextView textView = (TextView)view.findViewById(R.id.name);
+            textView.setText(name);
+        }
+    }
+
+    public void setName(String name){
+        this.name = name;
+        setName();
+    }
+
+    public void setMetaData(File metaData){
+        this.metaData = metaData;
+        readMetaData();
+        maxBeats = bars * Rhythm.bpb;
+    }
+
+    public void readMetaData(){
+        try{
+            FileReader fileReader = new FileReader(metaData);
+            JsonReader reader = new JsonReader(fileReader);
+            reader.beginObject();
+            while(reader.hasNext()){
+                String curName = reader.nextName();
+                switch (curName){
+                    case "Bars":
+                        bars = reader.nextInt();
+                        break;
+                    case "BPM":
+                        bpm = reader.nextInt();
+                        break;
+                    case "Title":
+                        name = reader.nextString();
+                        break;
+                    default:
+                        reader.skipValue();
+                }
+            }
+            reader.endObject();
+            reader.close();
+            fileReader.close();
+
+        } catch(IOException e){
+            e.printStackTrace();
+        }
+
+        invalidateAdapter();
+    }
+
+    public void setFile(File audioFile){
+        this.audioFile = audioFile;
+        int length = (int)audioFile.length();
         byte[] bytes = new byte[length];
         short[] shortBuf = new short[length/2];
         try {
-            BufferedInputStream buf = new BufferedInputStream(new FileInputStream(file));
+            BufferedInputStream buf = new BufferedInputStream(new FileInputStream(audioFile));
             buf.read(bytes, 0, length);
             buf.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
+        float sum = 0;
+        int values = 100;
+        waveValues = new ArrayList<>();
         for(int i = 0; i<length/2; i++){
-            shortBuf[i] = ( (short)( ( bytes[i*2] & 0xff )|( bytes[i*2 + 1] << 8 ) ) );
+            short val = ( (short)( ( bytes[i*2] & 0xff )|( bytes[i*2 + 1] << 8 ) ) );
+            shortBuf[i] = val;
+            //weird stuff to stop overloading values
+            sum += Math.abs(val/(float)Short.MAX_VALUE);
+            if(i % ((length/2)/values) == 0){
+                waveValues.add(sum/((length/2)/values));
+                sum = 0;
+            }
         }
+
+
         write(shortBuf, 0, length/2);
         setNotificationMarkerPosition(length/2);
     }
@@ -81,16 +157,7 @@ public class Audio extends AudioTrack {
     }
 
     public boolean canPlay(){
-        return enabled && file != null;
-    }
-
-    public void PlayStop(){
-        if(canPlay()){
-            if(isPlaying()){
-                stop();
-            } else
-                play();
-        }
+        return enabled && audioFile != null && metaData != null;
     }
 
     @Override
@@ -101,17 +168,35 @@ public class Audio extends AudioTrack {
             Log.w("'Hol up", "Audio name:" + name + " is not loaded and/or enabled");
     }
 
-    @Override
-    public void stop() throws IllegalStateException {
-        if(isPlaying())
-            super.stop();
-        else
-            Log.w("Too keen", "Audio name:" + name + " is already playing");
+    public void restart(){
+        stop();
+        setPlaybackHeadPosition(0);
+        play();
+    }
+
+    public void setBars(){
+        if(view != null){
+            TextView barsView = (TextView)view.findViewById(R.id.bars);
+            barsView.setText(Integer.toString(bars) +  (bars == 1 ? " Bar" : " Bars"));
+        }
+    }
+
+    public void setBars(int bars){
+        this.bars = bars;
+        invalidateAdapter();
+        //setBars();
+    }
+
+    public void invalidateAdapter(){
+        if(adapter != null){
+            adapter.notifyDataSetInvalidated();
+        }
     }
 
     public void delete(){
         stop();
         release();
-        new File(file).delete();
+        audioFile.delete();
+        metaData.delete();
     }
 }
