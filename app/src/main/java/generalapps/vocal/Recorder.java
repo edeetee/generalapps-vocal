@@ -45,7 +45,7 @@ public class Recorder {
     Audio audio;
     int beats = 0;
     int buffer;
-    int FREQ = 44100;
+    static int FREQ = 44100;
 
     boolean recording = false;
 
@@ -65,7 +65,7 @@ public class Recorder {
         adapter.add(audio);
         audio.setName(timeString);
 
-        buffer = AudioRecord.getMinBufferSize(44100, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+        buffer = AudioRecord.getMinBufferSize(FREQ, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
         recorder = new AudioRecord(MediaRecorder.AudioSource.MIC,
                 FREQ,
                 AudioFormat.CHANNEL_IN_MONO,
@@ -82,6 +82,7 @@ public class Recorder {
         toneTask = new TimerTask() {
             @Override
             public void run() {
+                setProgress(beats % Rhythm.bpb + 1);
                 beats++;
                 if(beats < Rhythm.bpb)
                     toneGenerator.startTone(ToneGenerator.TONE_DTMF_1, 50);
@@ -99,18 +100,16 @@ public class Recorder {
                 } else {
                     stop();
                 }
-                context.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                    DonutProgress progressBar = (DonutProgress)context.findViewById(R.id.donut_progress);
-                    progressBar.setProgress(beats % Rhythm.bpb+1);
-                    }
-                });
         } };
 
-        toneTimer.scheduleAtFixedRate(toneTask, 0, Rhythm.msBeatPeriod());
-
-        updateButton();
+        toneTimer.scheduleAtFixedRate(toneTask, Rhythm.msBeatPeriod(), Rhythm.msBeatPeriod());
+        context.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                DonutProgress progressBar = (DonutProgress)context.findViewById(R.id.donut_progress);
+                progressBar.setProgress(beats % Rhythm.bpb+1);
+            }
+        });
     }
 
     private void writeAudioDataToFile() {
@@ -184,7 +183,7 @@ public class Recorder {
         beats = 0;
         recordingThread = null;
         toneTask = null;
-        updateButton();
+        resetProgress();
     }
 
     public File writeMetaData() {
@@ -216,13 +215,24 @@ public class Recorder {
         return audio != null;
     }
 
-    public void updateButton(){
+    public void setProgress(final int progress){
+        context.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                DonutProgress progressBar = (DonutProgress)context.findViewById(R.id.donut_progress);
+                progressBar.setProgress(progress);
+            }
+        });
+    }
+
+    public void resetProgress(){
         context.runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 //TODO Remove or do something here
 //                Button button = (Button)context.findViewById(R.id.recordButton);
 //                button.setText(isRecording() ? "Stop" : "Record");
+                 MainActivity.recordProgress.setProgress(0);
             }
         });
     }

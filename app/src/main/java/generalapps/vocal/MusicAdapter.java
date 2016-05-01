@@ -61,12 +61,12 @@ public class MusicAdapter extends BaseAdapter {
         notifyDataSetChanged();
     }
 
-    public void play(){
-        if(playing)
+    public void play() {
+        if (playing)
             return;
 
         playing = true;
-        for(Audio audio : audios){
+        for (Audio audio : audios) {
             audio.play();
         }
 
@@ -76,7 +76,7 @@ public class MusicAdapter extends BaseAdapter {
             public void run() {
                 beats++;
                 updateAudios();
-                if(!playing)
+                if (!playing)
                     cancel();
             }
         }, Rhythm.msBeatPeriod(), Rhythm.msBeatPeriod());
@@ -157,6 +157,9 @@ public class MusicAdapter extends BaseAdapter {
         if(audio.waveValues != null){
             WaveView waveView = (WaveView)convertView.findViewById(R.id.waveform);
             waveView.points = audio.waveValues;
+            if(playing){
+
+            }
             waveView.invalidate();
         }
 
@@ -177,5 +180,12 @@ public class MusicAdapter extends BaseAdapter {
         return listView.getPositionForView(v);
     }
 
-
+    void setAudioProgresses(float progress){
+        for(Audio audio : audios){
+            WaveView waveView = (WaveView)audio.view.findViewById(R.id.waveform);
+            waveView.progress = progress;
+            waveView.playing = playing;
+        }
+        notifyDataSetInvalidated();
+    }
 }

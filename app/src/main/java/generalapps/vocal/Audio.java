@@ -41,7 +41,7 @@ public class Audio extends AudioTrack {
     boolean enabled = true;
 
     public Audio(){
-        super(AudioManager.STREAM_MUSIC, 44100, AudioFormat.CHANNEL_OUT_DEFAULT, AudioFormat.ENCODING_PCM_16BIT, 500000, AudioTrack.MODE_STATIC);
+        super(AudioManager.STREAM_MUSIC, Recorder.FREQ, AudioFormat.CHANNEL_OUT_DEFAULT, AudioFormat.ENCODING_PCM_16BIT, 500000, AudioTrack.MODE_STATIC);
 
         setPlaybackPositionUpdateListener(new OnPlaybackPositionUpdateListener() {
             @Override
@@ -128,20 +128,31 @@ public class Audio extends AudioTrack {
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+
         float sum = 0;
         int values = 100;
+        int maxTick = 4*Rhythm.bpb*Recorder.FREQ/2;
+        float maxSum = 0;
         waveValues = new ArrayList<>();
         for(int i = 0; i<length/2; i++){
             short val = ( (short)( ( bytes[i*2] & 0xff )|( bytes[i*2 + 1] << 8 ) ) );
             shortBuf[i] = val;
             //weird stuff to stop overloading values
             sum += Math.abs(val/(float)Short.MAX_VALUE);
-            if(i % ((length/2)/values) == 0){
-                waveValues.add(sum/((length/2)/values));
+
+            if(i % (maxTick/values) == 0){
+                waveValues.add(sum);
+                if(maxSum < sum)
+                    maxSum = sum;
                 sum = 0;
             }
         }
 
+        //normalize
+        for(int i = 0; i < waveValues.size(); i++){
+            waveValues.set(i, waveValues.get(i)/maxSum);
+        }
 
         write(shortBuf, 0, length/2);
         setNotificationMarkerPosition(length/2);
@@ -189,14 +200,26 @@ public class Audio extends AudioTrack {
 
     public void invalidateAdapter(){
         if(adapter != null){
-            adapter.notifyDataSetInvalidated();
+            MainActivity.context.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    adapter.notifyDataSetInvalidated();
+                }
+            });
         }
     }
 
     public void delete(){
-        stop();
-        release();
-        audioFile.delete();
-        metaData.delete();
+        try{
+            stop();
+            release();
+        } catch (IllegalStateException e){
+            Log.w("IllegalState", "Audio " + name + " is in an illegal state. Continuing with delete.");
+
+        }
+        if(audioFile != null)
+            audioFile.delete();
+        if(metaData != null)
+            metaData.delete();
     }
 }

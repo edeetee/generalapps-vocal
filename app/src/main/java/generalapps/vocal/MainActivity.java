@@ -37,9 +37,12 @@ public class MainActivity extends ActionBarActivity {
 
     Recorder recorder;
     MusicAdapter musicAdapter;
+    static Activity context;
+    static DonutProgress recordProgress;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        context = this;
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
@@ -68,13 +71,20 @@ public class MainActivity extends ActionBarActivity {
                 Log.w("MetaData Loading", "Metadata does not exist for the file " + audioFile.getName());
         }
 
+        for(Audio audio : oldAudios){
+            if(audio.getState() == 2){
+                Log.w("Bad State", "Audio " + audio.name + " is " + audio.getState());
+
+            }
+        }
+
         recorder = new Recorder(this);
 
         ListView list = (ListView)findViewById(R.id.mainListView);
         musicAdapter = new MusicAdapter(this, oldAudios);
         list.setAdapter(musicAdapter);
 
-        final DonutProgress recordProgress = (DonutProgress)findViewById(R.id.donut_progress);
+        recordProgress = (DonutProgress)findViewById(R.id.donut_progress);
         //recordProgress.setMax(4);
         recordProgress.setSuffixText("");
         recordProgress.setInnerBottomText("Play/Record");

@@ -15,7 +15,10 @@ import java.util.List;
  */
 public class WaveView extends View {
     public List<Float> points;
-    Paint paint;
+    Paint wavePaint;
+    Paint progressPaint;
+    float progress;
+    boolean playing;
 
     public WaveView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -23,9 +26,12 @@ public class WaveView extends View {
     }
 
     private void init(){
-        paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        paint.setColor(Color.BLUE);
-        paint.setStyle(Paint.Style.FILL);
+        wavePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        wavePaint.setColor(Color.BLUE);
+        wavePaint.setStyle(Paint.Style.FILL);
+
+        progressPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        progressPaint.setColor(Color.RED);
     }
 
     public void setPoints(List<Float> points){
@@ -47,14 +53,25 @@ public class WaveView extends View {
             Path path = new Path();
             path.moveTo(0,h);
 
-            for(int i = 0; i < points.size(); i++){
-                int x = w*i/ points.size();
+            for(int i = 0; i < 100; i++){
+                int x = i * w/100;
+
+                if(points.size() <= i){
+                    path.lineTo(x, h);
+                    break;
+                }
+
                 int y = Math.round(h-points.get(i)*h);
                 path.lineTo(x, y);
             }
             path.lineTo(w,h);
 
-            canvas.drawPath(path, paint);
+            canvas.drawPath(path, wavePaint);
+
+            if(playing){
+                float x = progress*w;
+                canvas.drawLine(x, h, x, 0, progressPaint);
+            }
         }
     }
 }
