@@ -87,6 +87,7 @@ public class Recorder {
                 });
 
                 //if pre-recording (metronome)
+                recordProgress.doHeartBeat();
                 if(beats < Rhythm.bpb)
                     toneGenerator.startTone(ToneGenerator.TONE_DTMF_1, 50);
                 //if start recording

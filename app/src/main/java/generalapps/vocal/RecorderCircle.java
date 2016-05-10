@@ -1,7 +1,11 @@
 package generalapps.vocal;
 
+import android.app.ActionBar;
 import android.content.Context;
+import android.graphics.Canvas;
 import android.util.AttributeSet;
+import android.util.Log;
+import android.view.ViewGroup;
 
 import generalapps.vocal.com.github.lzyzsd.circleprogress.DonutProgress;
 
@@ -25,6 +29,15 @@ public class RecorderCircle extends DonutProgress {
         }
     };
 
+    long beatStart = 0;
+    boolean inBeat = false;
+    int startSize;
+
+    static int heartBeatLength = Rhythm.msBeatPeriod()/4;
+    static float peak = .02f;
+    static float peakMod = .1f;
+
+
     public RecorderCircle(Context context) {
         this(context, null);
     }
@@ -42,6 +55,43 @@ public class RecorderCircle extends DonutProgress {
         setBeat(0);
 
         setMax(100);
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        if(inBeat)
+            drawHeartBeat();
+        super.onDraw(canvas);
+    }
+
+    private void drawHeartBeat(){
+        long time = System.currentTimeMillis()-beatStart;
+        float progress = (float)time/heartBeatLength;
+        ViewGroup.LayoutParams params = getLayoutParams();
+        if(progress < peak){
+            float incrProgress = progress/peak;
+            params.height = Math.round(startSize+startSize*incrProgress*peakMod);
+            params.width = params.height;
+            setLayoutParams(params);
+        } else if(progress < 1){
+            float decrProgress = 1-(progress-peak)/(1-peak);
+            params.height = Math.round(startSize+startSize*decrProgress*peakMod);
+            params.width = params.height;
+            setLayoutParams(params);
+        } else{
+            inBeat = false;
+            params.height = startSize;
+            params.width = startSize;
+            setLayoutParams(params);
+        }
+        postInvalidate();
+    }
+
+    public void doHeartBeat(){
+        inBeat = true;
+        beatStart = System.currentTimeMillis();
+        startSize = getLayoutParams().height;
+        postInvalidate();
     }
 
     public void setBeat(int beats){
