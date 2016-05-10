@@ -6,7 +6,7 @@ android {
 
     defaultConfig {
         applicationId "generalapps.vocal"
-        minSdkVersion 23
+        minSdkVersion 14
         targetSdkVersion 23
         versionCode 1
         versionName "1.0"
@@ -26,6 +26,4 @@ repositories{
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     compile 'com.android.support:appcompat-v7:23.3.0'
-    compile 'com.github.lzyzsd:circleprogress:1.1.0@aar'
-    //compile 'com.github.Semantive:waveform-android:v1.2'
 }

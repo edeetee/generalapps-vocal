@@ -7,26 +7,16 @@ import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.media.ToneGenerator;
 import android.util.JsonWriter;
-import android.widget.Button;
 import android.widget.ListView;
-import android.widget.ProgressBar;
-
-import com.github.lzyzsd.circleprogress.DonutProgress;
-
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.nio.Buffer;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
 import java.util.Calendar;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -37,13 +27,15 @@ public class Recorder {
     AudioRecord recorder;
     ToneGenerator toneGenerator;
     Timer toneTimer;
-    TimerTask toneTask;
+    TimerTask beatTask;
     Thread recordingThread;
     File audioFile;
     String timeString;
     Activity context;
     Audio audio;
+    //0 == 1. 1and2and3and4and (music signature)
     int beats = 0;
+    List<Float> wavePoints;
     int buffer;
     static int FREQ = 44100;
 
@@ -79,37 +71,49 @@ public class Recorder {
             }
         }, "AudioRecorder Thread");
 
-        toneTask = new TimerTask() {
+        final RecorderCircle recordProgress = (RecorderCircle)context.findViewById(R.id.recordProgress);
+
+        beatTask = new TimerTask() {
             @Override
             public void run() {
-                setProgress(beats % Rhythm.bpb + 1);
-                beats++;
+                //update record button beat value
+                recordProgress.post(new Runnable() {
+                    //cache current beats value
+                    int curBeats = beats;
+                    @Override
+                    public void run() {
+                        recordProgress.setBeat(curBeats%Rhythm.bpb+1);
+                    }
+                });
+
+                //if pre-recording (metronome)
                 if(beats < Rhythm.bpb)
                     toneGenerator.startTone(ToneGenerator.TONE_DTMF_1, 50);
+                //if start recording
                 else if (beats == Rhythm.bpb){
                     recordingThread.start();
                     recorder.startRecording();
-                } else if (beats < Rhythm.bpb*Rhythm.maxBars){
+                //currently recording (update bars)
+                } else if (beats < Rhythm.bpb*(Rhythm.maxBars+1)){
                     context.runOnUiThread(new Runnable() {
+                        //cache current value
+                        int curBeats = beats;
                         @Override
                         public void run() {
                             if(audio != null)
-                                audio.setBars(beats / Rhythm.bpb);
+                                audio.setBars(curBeats / Rhythm.bpb);
                         }
                     });
                 } else {
                     stop();
                 }
+
+                beats++;
         } };
 
-        toneTimer.scheduleAtFixedRate(toneTask, Rhythm.msBeatPeriod(), Rhythm.msBeatPeriod());
-        context.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                DonutProgress progressBar = (DonutProgress)context.findViewById(R.id.donut_progress);
-                progressBar.setProgress(beats % Rhythm.bpb+1);
-            }
-        });
+        recordProgress.startLoop(Rhythm.msBarPeriod());
+
+        toneTimer.scheduleAtFixedRate(beatTask, 0, Rhythm.msBeatPeriod());
     }
 
     private void writeAudioDataToFile() {
@@ -123,6 +127,11 @@ public class Recorder {
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
+
+        int totalI = 0;
+        float sum = 0f;
+        WaveView waveView = (WaveView)audio.view.findViewById(R.id.waveform);
+
         boolean last = false;
         //long countAim = (60*Rhythm.bpb*FREQ)/Rhythm.bpm*Rhythm.bars;
         while (recording) { //isRecording() || last
@@ -138,6 +147,20 @@ public class Recorder {
             } catch (IOException e) {
                 e.printStackTrace();
             }
+
+            //generate wave values
+            for(int i = 0; i<buffer/2; i++){
+                //weird stuff to stop overloading values
+                sum += Math.abs(sData[i]/(float)Short.MAX_VALUE);
+
+                if((totalI+i) % (Rhythm.maxTicks()/WaveView.points) == 0){
+                    audio.waveValues.add(sum);
+                    sum = 0f;
+                    waveView.postInvalidate();
+                }
+            }
+            totalI += buffer/2;
+
 
             if(last)
                 last = false;
@@ -159,7 +182,6 @@ public class Recorder {
         for (int i = 0; i < shortArrsize; i++) {
             bytes[i * 2] = (byte) (sData[i] & 0x00FF);
             bytes[(i * 2) + 1] = (byte) (sData[i] >> 8);
-            sData[i] = 0;
         }
         return bytes;
     }
@@ -177,13 +199,15 @@ public class Recorder {
             adapter.delete(audio);
         }
 
-        toneTask.cancel();
+        beatTask.cancel();
 
         audio = null;
         beats = 0;
         recordingThread = null;
-        toneTask = null;
-        resetProgress();
+        beatTask = null;
+
+        RecorderCircle recordProgress = (RecorderCircle)context.findViewById(R.id.recordProgress);
+        recordProgress.resetLoop();
     }
 
     public File writeMetaData() {
@@ -213,27 +237,5 @@ public class Recorder {
 
     public boolean isRecording(){
         return audio != null;
-    }
-
-    public void setProgress(final int progress){
-        context.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                DonutProgress progressBar = (DonutProgress)context.findViewById(R.id.donut_progress);
-                progressBar.setProgress(progress);
-            }
-        });
-    }
-
-    public void resetProgress(){
-        context.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                //TODO Remove or do something here
-//                Button button = (Button)context.findViewById(R.id.recordButton);
-//                button.setText(isRecording() ? "Stop" : "Record");
-                 MainActivity.recordProgress.setProgress(0);
-            }
-        });
     }
 }

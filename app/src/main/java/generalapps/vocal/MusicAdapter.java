@@ -4,11 +4,15 @@ import android.app.Activity;
 import android.graphics.Color;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
+import android.os.Handler;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.widget.BaseAdapter;
 import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -23,8 +27,10 @@ import java.util.TimerTask;
 public class MusicAdapter extends BaseAdapter {
 
     List<Audio> audios;
+    List<WaveView> waves;
     Activity context;
-    boolean playing = false;
+    static boolean playing = false;
+    static float progress = 0f;
     int beats = 0;
     ToneGenerator toneGenerator = new ToneGenerator(AudioManager.STREAM_MUSIC, 20);
     Timer timer = new Timer();
@@ -35,7 +41,10 @@ public class MusicAdapter extends BaseAdapter {
             int pos = getInnerViewPosition(v);
             Audio audio = audios.get(pos);
             audio.enabled = !audio.enabled;
-            v.setBackgroundColor(audio.enabled ? Color.TRANSPARENT : Color.GRAY);
+
+            WaveView wave = (WaveView)v.findViewById(R.id.waveform);
+            wave.barPaint.setColor(audio.enabled ? WaveView.ENABLEDCOLOR : WaveView.DISABLEDCOLOR);
+            wave.postInvalidate();
         }
     };
 
@@ -47,9 +56,26 @@ public class MusicAdapter extends BaseAdapter {
         }
     };
 
-    public MusicAdapter(Activity context) {
-        this(context, new ArrayList<Audio>());
-    }
+    private Handler progressHandler = new Handler();
+    long startTime;
+    private Runnable progressRunnable = new Runnable() {
+        @Override
+        public void run() {
+            long time = System.currentTimeMillis();
+            if(time < startTime)
+                startTime = time;
+
+            progress = (float)(time-startTime)/Rhythm.msMaxPeriod();
+
+            for(int i = 0; i < getCount(); i++){
+                Audio audio = audios.get(i);
+                WaveView waveView = (WaveView)audio.view.findViewById(R.id.waveform);
+                waveView.postInvalidate();
+            }
+
+            progressHandler.postDelayed(progressRunnable, 1000/30);
+        }
+    };
 
     public MusicAdapter(Activity context, List<Audio> audios) {
         this.context = context;
@@ -66,9 +92,13 @@ public class MusicAdapter extends BaseAdapter {
             return;
 
         playing = true;
-        for (Audio audio : audios) {
+        for (int i = 0; i < getCount(); i++) {
+            Audio audio = audios.get(i);
             audio.play();
         }
+
+        startTime = System.currentTimeMillis();
+        progressHandler.post(progressRunnable);
 
         beats = 0;
         timer.scheduleAtFixedRate(new TimerTask() {
@@ -104,6 +134,8 @@ public class MusicAdapter extends BaseAdapter {
 
         playing = false;
         beats = 0;
+
+        progressHandler.removeCallbacks(progressRunnable);
         for(Audio audio : audios){
             audio.stop();
         }
@@ -148,7 +180,7 @@ public class MusicAdapter extends BaseAdapter {
 
         audio.setName();
 
-        TextView info = (TextView)convertView.findViewById(R.id.name);
+        FrameLayout info = (FrameLayout) convertView.findViewById(R.id.waveAndName);
         info.setOnClickListener(infoClick);
 
         Button delete = (Button)convertView.findViewById(R.id.delete);
@@ -156,10 +188,7 @@ public class MusicAdapter extends BaseAdapter {
 
         if(audio.waveValues != null){
             WaveView waveView = (WaveView)convertView.findViewById(R.id.waveform);
-            waveView.points = audio.waveValues;
-            if(playing){
-
-            }
+            waveView.setAudio(audio);
             waveView.invalidate();
         }
 
@@ -178,14 +207,5 @@ public class MusicAdapter extends BaseAdapter {
         }
         ListView listView = (ListView)parent;
         return listView.getPositionForView(v);
-    }
-
-    void setAudioProgresses(float progress){
-        for(Audio audio : audios){
-            WaveView waveView = (WaveView)audio.view.findViewById(R.id.waveform);
-            waveView.progress = progress;
-            waveView.playing = playing;
-        }
-        notifyDataSetInvalidated();
     }
 }

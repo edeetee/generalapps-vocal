@@ -13,8 +13,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:id="@+id/mainListView" />
-        <com.github.lzyzsd.circleprogress.DonutProgress
-            android:id="@+id/donut_progress"
+        <generalapps.vocal.RecorderCircle
+            android:id="@+id/recordProgress"
             android:layout_alignParentBottom="true"
             android:layout_centerHorizontal="true"
             android:layout_width="150dp"

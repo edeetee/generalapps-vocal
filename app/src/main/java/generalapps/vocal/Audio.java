@@ -34,7 +34,7 @@ public class Audio extends AudioTrack {
     int bars = 0;
     int maxBeats;
 
-    List<Float> waveValues;
+    WaveView.WaveValues waveValues = new WaveView.WaveValues();
 
     View view;
     MusicAdapter adapter;
@@ -129,29 +129,21 @@ public class Audio extends AudioTrack {
             e.printStackTrace();
         }
 
+        if(waveValues.size() == 0){
+            float sum = 0;
+            int maxTick = Rhythm.maxTicks();
+            waveValues.clear();
+            for(int i = 0; i<length/2; i++){
+                short val = ( (short)( ( bytes[i*2] & 0xff )|( bytes[i*2 + 1] << 8 ) ) );
+                shortBuf[i] = val;
+                //weird stuff to stop overloading values
+                sum += Math.abs(val/(float)Short.MAX_VALUE);
 
-        float sum = 0;
-        int values = 100;
-        int maxTick = 4*Rhythm.bpb*Recorder.FREQ/2;
-        float maxSum = 0;
-        waveValues = new ArrayList<>();
-        for(int i = 0; i<length/2; i++){
-            short val = ( (short)( ( bytes[i*2] & 0xff )|( bytes[i*2 + 1] << 8 ) ) );
-            shortBuf[i] = val;
-            //weird stuff to stop overloading values
-            sum += Math.abs(val/(float)Short.MAX_VALUE);
-
-            if(i % (maxTick/values) == 0){
-                waveValues.add(sum);
-                if(maxSum < sum)
-                    maxSum = sum;
-                sum = 0;
+                if(i % (maxTick/WaveView.points) == 0){
+                    waveValues.add(sum);
+                    sum = 0;
+                }
             }
-        }
-
-        //normalize
-        for(int i = 0; i < waveValues.size(); i++){
-            waveValues.set(i, waveValues.get(i)/maxSum);
         }
 
         write(shortBuf, 0, length/2);
@@ -180,8 +172,10 @@ public class Audio extends AudioTrack {
     }
 
     public void restart(){
-        stop();
-        setPlaybackHeadPosition(0);
+        if(isPlaying())
+            stop();
+        if(getPlaybackHeadPosition() != 0)
+            setPlaybackHeadPosition(0);
         play();
     }
 
@@ -192,10 +186,14 @@ public class Audio extends AudioTrack {
         }
     }
 
-    public void setBars(int bars){
-        this.bars = bars;
+    public void setBars(int tryBars){
+        for(int bar : Rhythm.barTypes){
+            if(tryBars <= bar){
+                this.bars = bar;
+                break;
+            }
+        }
         invalidateAdapter();
-        //setBars();
     }
 
     public void invalidateAdapter(){
