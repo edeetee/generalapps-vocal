@@ -16,6 +16,7 @@ import org.json.JSONException;
 
 import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
@@ -28,32 +29,22 @@ import java.util.List;
 public class Audio extends AudioTrack {
     AudioTrack track;
     String name;
-    private File audioFile;
-    private File metaData;
-    int bpm;
+    File audioFile;
+    File metaData;
     int bars = 0;
+    int ticks;
     int maxBeats;
 
     WaveView.WaveValues waveValues = new WaveView.WaveValues();
 
     View view;
-    MusicAdapter adapter;
+    AudioGroup group;
+    //is audio enabled in ui
     boolean enabled = true;
 
     public Audio(){
-        super(AudioManager.STREAM_MUSIC, Recorder.FREQ, AudioFormat.CHANNEL_OUT_DEFAULT, AudioFormat.ENCODING_PCM_16BIT, 500000, AudioTrack.MODE_STATIC);
-
-        setPlaybackPositionUpdateListener(new OnPlaybackPositionUpdateListener() {
-            @Override
-            public void onMarkerReached(AudioTrack track) {
-                stop();
-            }
-
-            @Override
-            public void onPeriodicNotification(AudioTrack track) {
-
-            }
-        });
+        //TODO make AudioGroup and Audio constructors linked so that Recorder.FREQ*Rhythm.msMaxPeriod()/1000 can be used for buffer
+        super(AudioManager.STREAM_MUSIC, Recorder.FREQ, AudioFormat.CHANNEL_OUT_DEFAULT, AudioFormat.ENCODING_PCM_16BIT, 1000000, AudioTrack.MODE_STATIC);
     }
 
     public Audio(File metaData){
@@ -78,6 +69,13 @@ public class Audio extends AudioTrack {
         setName();
     }
 
+    public void setEnabled(boolean enabled){
+        if(this.enabled && !enabled)
+            stop();
+
+        this.enabled = enabled;
+    }
+
     public void setMetaData(File metaData){
         this.metaData = metaData;
         readMetaData();
@@ -94,9 +92,6 @@ public class Audio extends AudioTrack {
                 switch (curName){
                     case "Bars":
                         bars = reader.nextInt();
-                        break;
-                    case "BPM":
-                        bpm = reader.nextInt();
                         break;
                     case "Title":
                         name = reader.nextString();
@@ -119,6 +114,7 @@ public class Audio extends AudioTrack {
     public void setFile(File audioFile){
         this.audioFile = audioFile;
         int length = (int)audioFile.length();
+        ticks = length/2;
         byte[] bytes = new byte[length];
         short[] shortBuf = new short[length/2];
         try {
@@ -129,25 +125,25 @@ public class Audio extends AudioTrack {
             e.printStackTrace();
         }
 
-        if(waveValues.size() == 0){
-            float sum = 0;
-            int maxTick = Rhythm.maxTicks();
-            waveValues.clear();
-            for(int i = 0; i<length/2; i++){
-                short val = ( (short)( ( bytes[i*2] & 0xff )|( bytes[i*2 + 1] << 8 ) ) );
-                shortBuf[i] = val;
-                //weird stuff to stop overloading values
-                sum += Math.abs(val/(float)Short.MAX_VALUE);
+        float sum = 0;
+        waveValues.clear();
+        for(int i = 0; i<ticks; i++){
+            short val = ( (short)( ( bytes[i*2] & 0xff )|( bytes[i*2 + 1] << 8 ) ) );
+            shortBuf[i] = val;
+            //weird stuff to stop overloading values
+            sum += Math.abs(val/(float)Short.MAX_VALUE);
 
-                if(i % (maxTick/WaveView.points) == 0){
-                    waveValues.add(sum);
-                    sum = 0;
-                }
+            if(i % (ticks/WaveView.points) == 0){
+                waveValues.add(sum);
+                sum = 0;
             }
         }
 
-        write(shortBuf, 0, length/2);
-        setNotificationMarkerPosition(length/2);
+        int written = write(shortBuf, 0, ticks);
+        if(written < ticks)
+            Log.e("AudioWrite", "Audio write failed. Length: " + Integer.toString(ticks) + ", Written: " + Integer.toString(written));
+
+        setNotificationMarkerPosition(ticks);
     }
 
     @Override
@@ -197,11 +193,11 @@ public class Audio extends AudioTrack {
     }
 
     public void invalidateAdapter(){
-        if(adapter != null){
+        if(MainActivity.adapter != null){
             MainActivity.context.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    adapter.notifyDataSetInvalidated();
+                    MainActivity.adapter.notifyDataSetChanged();
                 }
             });
         }
@@ -215,9 +211,26 @@ public class Audio extends AudioTrack {
             Log.w("IllegalState", "Audio " + name + " is in an illegal state. Continuing with delete.");
 
         }
+        waveValues.clear();
         if(audioFile != null)
             audioFile.delete();
         if(metaData != null)
             metaData.delete();
+    }
+
+    public static Audio loadAudio(File dir, final String name){
+        File metaFile = dir.listFiles(new FileFilter() {
+            @Override
+            public boolean accept(File file) {
+                return file.getName().equals(name + ".json");
+            }
+        })[0];
+        File audioFile = dir.listFiles(new FileFilter() {
+            @Override
+            public boolean accept(File file) {
+                return file.getName().equals(name + ".wav");
+            }
+        })[0];
+        return new Audio(audioFile, metaFile);
     }
 }

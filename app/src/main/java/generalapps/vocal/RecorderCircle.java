@@ -32,8 +32,8 @@ public class RecorderCircle extends DonutProgress {
     long beatStart = 0;
     boolean inBeat = false;
     int startSize;
+    int heartBeatLength;
 
-    static int heartBeatLength = Rhythm.msBeatPeriod()/4;
     static float peak = .02f;
     static float peakMod = .1f;
 
@@ -87,7 +87,8 @@ public class RecorderCircle extends DonutProgress {
         postInvalidate();
     }
 
-    public void doHeartBeat(){
+    public void doHeartBeat(int heartBeatLength){
+        this.heartBeatLength = heartBeatLength;
         inBeat = true;
         beatStart = System.currentTimeMillis();
         startSize = getLayoutParams().height;
