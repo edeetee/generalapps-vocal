@@ -3,6 +3,7 @@ package generalapps.vocal;
 import android.app.ActionBar;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.ViewGroup;
@@ -16,21 +17,12 @@ import java.util.TimerTask;
  * Created by edeetee on 1/05/2016.
  */
 public class RecorderCircle extends DonutProgress {
-    Timer timer;
-    TimerTask loopTask = new TimerTask() {
-        @Override
-        public void run() {
-            post(new Runnable() {
-                @Override
-                public void run() {
-                    setProgress((getProgress()+1) % getMax());
-                }
-            });
-        }
-    };
 
     long beatStart = 0;
     boolean inBeat = false;
+    boolean doHighText = false;
+    boolean doLoop = false;
+    AudioGroup loopGroup;
     int startSize;
     int heartBeatLength;
 
@@ -49,8 +41,6 @@ public class RecorderCircle extends DonutProgress {
     public RecorderCircle(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
 
-        timer = new Timer();
-
         setInnerBottomText("Play/Record");
         setBeat(0);
 
@@ -61,7 +51,32 @@ public class RecorderCircle extends DonutProgress {
     protected void onDraw(Canvas canvas) {
         if(inBeat)
             drawHeartBeat();
+        if(doHighText)
+            drawHighText(canvas);
+        if(doLoop)
+            drawLoop();
         super.onDraw(canvas);
+    }
+
+    private void drawLoop(){
+        int currentMs = loopGroup.ticksToMs(MainActivity.recorder.ticks);
+        int barMs = loopGroup.getMsBarPeriod();
+        float progress = (float)(currentMs%barMs)/barMs;
+        setProgress(Math.round(getMax()*progress));
+        postInvalidate();
+    }
+
+    public void setDoHighText(boolean doHighText){
+        this.doHighText = doHighText;
+        postInvalidate();
+    }
+
+    private void drawHighText(Canvas canvas){
+        String text = getText();
+        if (!TextUtils.isEmpty(text)) {
+            float textHeight = (float)(textPaint.descent() + textPaint.ascent() + getHeight()*1.5);
+            canvas.drawText(text, (getWidth() - textPaint.measureText(text)) / 2.0f, (getWidth() - textHeight) / 2.0f, textPaint);
+        }
     }
 
     private void drawHeartBeat(){
@@ -99,34 +114,15 @@ public class RecorderCircle extends DonutProgress {
         setText(Integer.toString(beats));
     }
 
-    public void startLoop(int msLoopDuration){
-        loopTask = new TimerTask() {
-            @Override
-            public void run() {
-                post(new Runnable() {
-                    @Override
-                    public void run() {
-                        setProgress((getProgress()+1) % getMax());
-                    }
-                });
-            }
-        };
-        timer.scheduleAtFixedRate(loopTask, 0, msLoopDuration/getMax());
+    public void doLoop(AudioGroup group){
+        doLoop = true;
+        loopGroup = group;
+        postInvalidate();
     }
 
-    public void resetLoop(){
-        post(new Runnable() {
-            @Override
-            public void run() {
-                setProgress(0);
-            }
-        });
-        loopTask.cancel();
-        post(new Runnable() {
-            @Override
-            public void run() {
-                setBeat(0);
-            }
-        });
+    public void stopLoop(){
+        doLoop = false;
+        setProgress(0);
+        postInvalidate();
     }
 }

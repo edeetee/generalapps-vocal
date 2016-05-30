@@ -82,6 +82,7 @@ public class AudioGroup implements Iterable<Audio> {
     }
 
     private void changed(){
+        MainActivity.adapter.notifyDataSetChanged();
         MainActivity.context.runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -100,15 +101,26 @@ public class AudioGroup implements Iterable<Audio> {
             audio.delete();
             audios.remove(audio);
             changed();
+        } else {
+            delete();
         }
     }
 
     public void delete(){
+        if(MainActivity.adapter.playing)
+            MainActivity.adapter.stop();
+
         for(Audio audio : audios){
             audio.delete();
         }
-        metaData.delete();
-        dir.delete();
+        audios.clear();
+        first = null;
+        if(metaData != null)
+            metaData.delete();
+        if(dir != null)
+            dir.delete();
+        MainActivity.adapter.notifyDataSetInvalidated();
+        MainActivity.adapter.group = null;
     }
 
     public int size(){
@@ -211,5 +223,9 @@ public class AudioGroup implements Iterable<Audio> {
 
     public int maxTicks(){
         return msMaxPeriod()*Recorder.FREQ/1000;
+    }
+
+    public int ticksToMs(int ticks){
+        return 1000*ticks/Recorder.FREQ;
     }
 }

@@ -11,4 +11,13 @@ public final class Rhythm {
     public static int maxBeats(){
         return bpb*maxBars;
     }
+
+    public static int ceilBars(int tryBars){
+        for(int bar : Rhythm.barTypes){
+            if(tryBars <= bar){
+                return bar;
+            }
+        }
+        return 0;
+    }
 }

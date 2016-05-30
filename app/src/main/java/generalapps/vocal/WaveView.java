@@ -2,11 +2,14 @@ package generalapps.vocal;
 
 import android.content.Context;
 import android.content.res.TypedArray;
+import android.database.DataSetObservable;
+import android.database.DataSetObserver;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
+import android.provider.ContactsContract;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
@@ -23,6 +26,7 @@ public class WaveView extends View {
     //struct for points
     public static class WaveValues extends ArrayList<Float> {
         static private List<WaveValues> waves = new ArrayList<>();
+        List<DataSetObserver> observers = new ArrayList<>();
         private float maxVal = 0;
 
         public WaveValues() {
@@ -32,10 +36,20 @@ public class WaveView extends View {
 
         @Override
         public boolean add(Float object) {
-            if(getMax() < object)
+            if(maxVal < object)
                 maxVal = object;
 
             return super.add(object);
+        }
+
+        public synchronized void updateObservers(){
+            for(DataSetObserver observer : observers){
+                observer.onChanged();
+            }
+        }
+
+        public synchronized void registerDataSetObserver(DataSetObserver observer){
+            observers.add(observer);
         }
 
         @Override
@@ -67,7 +81,7 @@ public class WaveView extends View {
 
     private Audio audio;
 
-    static int points = 100;
+    static int points = 200;
     static int[] BARCOLORS = {Color.CYAN, Color.BLUE};//, Color.GREEN, Color.MAGENTA};
     static int minWidth;
 
@@ -76,6 +90,8 @@ public class WaveView extends View {
     Paint progressPaint;
     Paint[] barPaint;
     Paint disabledBarPaint;
+
+    Path wavePath;
 
     public WaveView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -112,12 +128,79 @@ public class WaveView extends View {
     }
 
     public void setAudio(Audio audio){
-        this.audio = audio;
+        if(!audio.equals(this.audio)){
+            this.audio = audio;
+            audio.waveValues.registerDataSetObserver(new DataSetObserver() {
+                @Override
+                public void onChanged() {
+                    super.onChanged();
+                    updateWave();
+                    postInvalidate();
+                }
+            });
+        }
     }
 
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
+    }
+
+    public void updateWave(){
+        if(audio != null && audio.waveValues != null && !audio.waveValues.isEmpty()) {
+
+            int w = getWidth();
+            int h = getHeight();
+
+            //all line up
+            //TODO this will screw up with orientation changes etc
+            if (minWidth == 0)
+                minWidth = w;
+            if (minWidth < w)
+                w = minWidth;
+
+            wavePath = new Path();
+            boolean preWaveForm = audio.audioFile == null;
+
+            for (int xi = 0; xi < Rhythm.maxBars / audio.bars; xi++) {
+                int xMod = w * xi * audio.bars / Rhythm.maxBars;
+
+                int inv = -1;
+                while (true) {
+                    int i = 0;
+                    wavePath.moveTo(xMod, h / 2);
+                    while (true) {
+                        int x;
+                        int xNext;
+                        //what format is the waveform in
+                        if (!preWaveForm) {
+                            x = Math.round((float) i * w * audio.ticks / audio.group.maxTicks() / points) + xMod;
+                            xNext = Math.round((float) (i + 1) * w * audio.ticks / audio.group.maxTicks() / points) + xMod;
+                        } else {
+                            x = w * i / points + xMod;
+                            xNext = w * (i + 1) / points + xMod;
+                        }
+
+                        //exit point. Either end of wave values or reached end of bar
+                        if (!(i < audio.waveValues.size()-1) || (xMod + w * audio.bars / Rhythm.maxBars) <= x) {
+                            wavePath.lineTo(x, h / 2);
+                            break;
+                        } else {
+                            int y = h / 2 + inv * Math.round(audio.waveValues.get(i) * h / 2);
+                            int yNext = h / 2 + inv * Math.round(audio.waveValues.get(i + 1) * h / 2);
+                            wavePath.quadTo(x, y, xNext, yNext);
+
+                            i++;
+                        }
+                    }
+                    //double sided waveform
+                    if (inv < 0)
+                        inv = -inv;
+                    else
+                        break;
+                }
+            }
+        }
     }
 
     @Override
@@ -135,54 +218,16 @@ public class WaveView extends View {
             if(minWidth < w)
                 w = minWidth;
 
-            Path path = new Path();
-            boolean preWaveForm = audio.audioFile == null;
-
-
             for(int xi = 0; xi < Rhythm.maxBars/audio.bars; xi++){
                 int xMod = w*xi*audio.bars/Rhythm.maxBars;
 
                 canvas.drawRect(new Rect(xMod, 0, w*audio.bars/Rhythm.maxBars+xMod, h), audio.enabled ? barPaint[xi%barPaint.length] : disabledBarPaint);
-
-                int inv = -1;
-                while(true){
-                    int i = 0;
-                    path.moveTo(xMod,h/2);
-                    while(true){
-                        int x;
-                        int xNext;
-                        //what format is the waveform in
-                        if(!preWaveForm){
-                            x = Math.round((float)i * w * audio.ticks / audio.group.maxTicks() / points) + xMod;
-                            xNext = Math.round((float)(i+1) * w * audio.ticks / audio.group.maxTicks() / points) + xMod;
-                        }
-                        else{
-                            x = w * i / points + xMod;
-                            xNext =  w * (i+1) / points + xMod;
-                        }
-
-                        //exit point. Either end of wave values or reached end of bar
-                        if(audio.waveValues.size()-1 == i || xMod+w*audio.bars/Rhythm.maxBars <= x){
-                            Log.i("Wave i", Integer.toString(i));
-                            path.lineTo(x, h/2);
-                            break;
-                        } else {
-                            int y = h/2 + inv*Math.round(audio.waveValues.get(i)*h/2);
-                            int yNext = h/2 + inv*Math.round(audio.waveValues.get(i+1)*h/2);
-                            path.quadTo(x, y, xNext, yNext);
-
-                            i++;
-                        }
-                    }
-                    //double sided waveform
-                    if(inv < 0)
-                        inv = -inv;
-                    else
-                        break;
-                }
             }
 
-            canvas.drawPath(path, audio.enabled ? wavePaint : disabledWavePaint);
+            if(wavePath == null)
+                updateWave();
+
+            canvas.drawPath(wavePath, audio.enabled ? wavePaint : disabledWavePaint);
 
             if(MainActivity.adapter.playing){
                 float x = w*MainActivity.adapter.getProgress();

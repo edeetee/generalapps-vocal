@@ -50,7 +50,6 @@ public class MainActivity extends ActionBarActivity {
 
         recordProgress = (RecorderCircle)findViewById(R.id.recordProgress);
         //recordProgress.setMax(4);
-        //playing
         recordProgress.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -66,10 +65,14 @@ public class MainActivity extends ActionBarActivity {
         recordProgress.setOnLongClickListener(new View.OnLongClickListener() {
             @Override
             public boolean onLongClick(View v) {
-                if(!adapter.playing)
-                    recorder.record();
-                else
-                    adapter.recordAtEnd();
+                //only if not first recording. First recording doesn't use longClick
+                Recorder.State state = recorder.getState();
+                if(adapter.getCount() != 0 && state == Recorder.State.NONE){
+                    if(!adapter.playing)
+                        recorder.record();
+                    else
+                        adapter.recordAtEnd();
+                }
                 return true;
             }
         });
@@ -78,14 +81,22 @@ public class MainActivity extends ActionBarActivity {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 Recorder.State state = recorder.getState();
+                int action = event.getAction();
+                //recording let go
                 if((state == Recorder.State.RECORDING || state == Recorder.State.PREPARED)
-                        && event.getAction() == MotionEvent.ACTION_UP){
+                        && action == MotionEvent.ACTION_UP){
                     recorder.stop();
                     adapter.play();
+                }
+                //if first recording
+                if(state == Recorder.State.NONE && adapter.getCount() == 0 && action == MotionEvent.ACTION_DOWN){
+                    recorder.record();
                 }
                 return false;
             }
         });
+
+        recordProgress.setText("");
 
         loadFiles();
     }

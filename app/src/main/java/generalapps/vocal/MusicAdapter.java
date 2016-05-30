@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.os.Handler;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
@@ -12,6 +13,7 @@ import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ListView;
 import android.widget.SeekBar;
+import android.widget.TextView;
 
 import java.util.List;
 import java.util.Timer;
@@ -57,6 +59,15 @@ public class MusicAdapter extends BaseAdapter {
         }
     };
 
+    View.OnClickListener barsClick = new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+            int pos = getInnerViewPosition(v);
+            Audio audio = group.get(pos);
+            audio.toggleRoundBarToNext();
+        }
+    };
+
     private Handler progressHandler = new Handler();
     long startTime;
 
@@ -79,11 +90,11 @@ public class MusicAdapter extends BaseAdapter {
     }
 
     public void play() {
+        updateBarLengthSeekBar();
+
         if (playing || getCount() == 0)
             return;
 
-        if(getCount() == 1)
-            MainActivity.lengthSeekBar.setVisibility(View.GONE);
 
         MainActivity.recordProgress.post(new Runnable() {
             @Override
@@ -105,10 +116,10 @@ public class MusicAdapter extends BaseAdapter {
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
-                beats = (beats+1)%Rhythm.maxBeats();
-                updateAudios();
                 if (!playing)
                     cancel();
+                beats = (beats+1)%Rhythm.maxBeats();
+                updateAudios();
                 if(recordAtEnd){
                     //if was too close to end
                     if(beats == Rhythm.bpb*(Rhythm.maxBars-1)){
@@ -125,27 +136,31 @@ public class MusicAdapter extends BaseAdapter {
     }
 
     public void updateAudios(){
-        for(Audio audio : group){
-            if(audio.canPlay()){
-                if(beats % (audio.bars*Rhythm.bpb) == 0){
-                    audio.restart();
+        if(getCount() != 0){
+            for(Audio audio : group){
+                if(audio.canPlay()){
+                    if(beats % (audio.bars*Rhythm.bpb) == 0){
+                        audio.restart();
+                    }
                 }
             }
+            context.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    notifyDataSetChanged();
+                }
+            });
         }
-        context.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                notifyDataSetChanged();
-            }
-        });
     }
 
     public void stop(){
+        updateBarLengthSeekBar();
+
         if(!playing)
             return;
 
-        if(getCount() == 1)
-            MainActivity.lengthSeekBar.setVisibility(View.VISIBLE);
+        playing = false;
+        beats = 0;
 
         MainActivity.recordProgress.post(new Runnable() {
             @Override
@@ -153,9 +168,6 @@ public class MusicAdapter extends BaseAdapter {
                 MainActivity.recordProgress.setInnerBottomText("Play/Record");
             }
         });
-
-        playing = false;
-        beats = 0;
 
         for(Audio audio : group){
             if(audio.canPlay())
@@ -184,6 +196,46 @@ public class MusicAdapter extends BaseAdapter {
     }
 
     @Override
+    public void notifyDataSetChanged() {
+        super.notifyDataSetChanged();
+        updateBarLengthSeekBar();
+    }
+
+    @Override
+    public void notifyDataSetInvalidated() {
+        super.notifyDataSetInvalidated();
+        stop();
+    }
+
+    private void updateBarLengthSeekBar(){
+        if(getCount() == 1 && !playing){
+            MainActivity.lengthSeekBar.setVisibility(View.VISIBLE);
+            MainActivity.lengthSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                    float pos = (float)(-i+50)/50;
+                    group.setMsBarPeriodMod(Math.round(pos * 2000));
+                    notifyDataSetChanged();
+                    group.get(0).waveValues.updateObservers();
+                }
+
+                @Override
+                public void onStartTrackingTouch(SeekBar seekBar) {
+
+                }
+
+                @Override
+                public void onStopTrackingTouch(SeekBar seekBar) {
+
+                }
+            });
+        } else {
+            MainActivity.lengthSeekBar.setVisibility(View.INVISIBLE);
+        }
+    }
+
+    @Override
     public View getView(final int position, View convertView, ViewGroup parent) {
         if(convertView == null){
             convertView = context.getLayoutInflater().inflate(R.layout.audio_list_view, parent, false);
@@ -198,11 +250,16 @@ public class MusicAdapter extends BaseAdapter {
         info.setOnClickListener(infoClick);
 
         Button delete = (Button)convertView.findViewById(R.id.delete);
-        if(position == 0)
+        if(position == 0){
             delete.setText("Delete (All)");
-        else
+        }else{
             delete.setText("Delete");
+
+        }
         delete.setOnClickListener(deleteClick);
+
+        TextView bars = (TextView)convertView.findViewById(R.id.bars);
+        bars.setOnClickListener(barsClick);
 
         if(audio.waveValues != null){
             WaveView waveView = (WaveView)convertView.findViewById(R.id.waveform);
@@ -211,31 +268,6 @@ public class MusicAdapter extends BaseAdapter {
         }
 
         audio.setBars();
-
-        if(getCount() == 1 && !playing){
-            MainActivity.lengthSeekBar.setVisibility(View.VISIBLE);
-            MainActivity.lengthSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-
-                @Override
-                public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
-                    float pos = (float)(i-50)/50;
-                    group.setMsBarPeriodMod(Math.round(pos * 1000));
-                    notifyDataSetChanged();
-                }
-
-                @Override
-                public void onStartTrackingTouch(SeekBar seekBar) {
-
-                }
-
-                @Override
-                public void onStopTrackingTouch(SeekBar seekBar) {
-
-                }
-            });
-        } else {
-            MainActivity.lengthSeekBar.setVisibility(View.GONE);
-        }
 
         return convertView;
     }

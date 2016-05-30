@@ -1,18 +1,12 @@
 package generalapps.vocal;
 
-import android.media.AudioAttributes;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
-import android.media.MediaPlayer;
 import android.util.JsonReader;
 import android.util.Log;
 import android.view.View;
-import android.widget.Adapter;
-import android.widget.ProgressBar;
 import android.widget.TextView;
-
-import org.json.JSONException;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -20,8 +14,6 @@ import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Created by edeetee on 13/04/2016.
@@ -31,7 +23,7 @@ public class Audio extends AudioTrack {
     String name;
     File audioFile;
     File metaData;
-    int bars = 0;
+    int bars = 1;
     int ticks;
     int maxBeats;
 
@@ -41,6 +33,7 @@ public class Audio extends AudioTrack {
     AudioGroup group;
     //is audio enabled in ui
     boolean enabled = true;
+    boolean roundBarToNext = true;
 
     public Audio(){
         //TODO make AudioGroup and Audio constructors linked so that Recorder.FREQ*Rhythm.msMaxPeriod()/1000 can be used for buffer
@@ -182,14 +175,39 @@ public class Audio extends AudioTrack {
         }
     }
 
-    public void setBars(int tryBars){
-        for(int bar : Rhythm.barTypes){
-            if(tryBars <= bar){
-                this.bars = bar;
-                break;
-            }
-        }
+    public void setBars(int bars){
+        this.bars = bars;
         invalidateAdapter();
+        waveValues.updateObservers();
+    }
+
+    public void setTicks(int ticks){
+        this.ticks = ticks;
+        autoSetBar();
+    }
+
+    public void autoSetBar(){
+        float calcBars = Rhythm.maxBars*ticks/group.maxTicks();
+        int prevBar = 1;
+        int nextBar = 1;
+        for(int bars : Rhythm.barTypes){
+            prevBar = nextBar;
+            nextBar = bars;
+
+            if(calcBars < nextBar)
+                break;
+        }
+        setBars(roundBarToNext ? nextBar : prevBar);
+    }
+
+    //if roundBarToNext is true, the bar length will emcompass the whole length, otherwise it will clip
+    public void setRoundBarToNext(boolean roundBarToNext){
+        this.roundBarToNext = roundBarToNext;
+        autoSetBar();
+    }
+
+    public void toggleRoundBarToNext(){
+        setRoundBarToNext(!roundBarToNext);
     }
 
     public void invalidateAdapter(){
