@@ -42,7 +42,7 @@ public class RecorderCircle extends DonutProgress {
         super(context, attrs, defStyleAttr);
 
         setInnerBottomText("Play/Record");
-        setBeat(0);
+        setText("");
 
         setMax(100);
     }
@@ -59,7 +59,7 @@ public class RecorderCircle extends DonutProgress {
     }
 
     private void drawLoop(){
-        int currentMs = loopGroup.ticksToMs(MainActivity.recorder.ticks);
+        int currentMs = Rhythm.ticksToMs(MainActivity.recorder.ticks);
         int barMs = loopGroup.getMsBarPeriod();
         float progress = (float)(currentMs%barMs)/barMs;
         setProgress(Math.round(getMax()*progress));

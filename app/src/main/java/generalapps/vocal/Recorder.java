@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Stack;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.logging.Logger;
 
 import generalapps.vocal.audioGen.AudioGenerator;
 
@@ -204,7 +205,7 @@ public class Recorder {
             recorder.startRecording();
             recordingStart = System.currentTimeMillis();
         } else
-            throw new IllegalStateException("State is " + state.name() + ". It should be " + State.PREPARED.name());
+            Log.w("Recording State", "State is " + state.name() + ". It should be " + State.PREPARED.name());
     }
 
     private void writeAudioDataToFile() {
@@ -242,6 +243,7 @@ public class Recorder {
                 e.printStackTrace();
             }
 
+            ticks += buffer/2;
             if(!first){
                 //generate wave values
                 for(int i = 0; i<buffer/2; i++){
@@ -253,7 +255,6 @@ public class Recorder {
                         sum = 0f;
                     }
                 }
-                ticks += buffer/2;
                 audio.setTicks(ticks);
                 audio.waveValues.updateObservers();
             }
@@ -281,19 +282,15 @@ public class Recorder {
         return state;
     }
 
-    private int getLength(){
-        return (int)(System.currentTimeMillis() - recordingStart);
-    }
-
     private boolean isLongEnough(){
-        return 500 < getLength();
+        return 500 < System.currentTimeMillis() - recordingStart;
     }
 
     public void stop(){
         //if the recording did not start, remove the empty audio view
         if(state == State.RECORDING && isLongEnough()){
             if(first){
-                MainActivity.adapter.group.setMsBarPeriod(getLength());
+                MainActivity.adapter.group.setMsBarPeriod(Rhythm.ticksToMs(ticks));
             } else{
                 audio.autoSetBar();
             }
@@ -330,6 +327,8 @@ public class Recorder {
 
         recorder.stop();
         recorder.release();
+
+        Log.i("Recorder", Float.toString((float)buffer/ticks));
 
         audio = null;
         beats = 0;

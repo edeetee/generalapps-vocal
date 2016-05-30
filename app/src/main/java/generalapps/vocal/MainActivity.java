@@ -2,12 +2,16 @@ package generalapps.vocal;
 
 import android.app.Activity;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.os.Handler;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.SeekBar;
 
@@ -25,9 +29,11 @@ public class MainActivity extends ActionBarActivity {
     static MusicAdapter adapter;
     static Activity context;
     static RecorderCircle recordProgress;
-    static SeekBar lengthSeekBar;
+    static LinearLayout adjustLayout;
 
     static WaveView testThis;
+
+    Handler handler;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,7 +52,47 @@ public class MainActivity extends ActionBarActivity {
         adapter = new MusicAdapter(this);
         list.setAdapter(adapter);
 
-        lengthSeekBar = (SeekBar)MainActivity.context.findViewById(R.id.lengthSeekBar);
+        handler = new Handler();
+
+        final int adjustVal = 0;
+        final Runnable adjustLeftRunnable = new Runnable() {
+            @Override
+            public void run() {
+                adapter.adjustGroup(20);
+                handler.postDelayed(this, 50);
+            }
+        };
+        final Runnable adjustRightRunnable = new Runnable() {
+            @Override
+            public void run() {
+                adapter.adjustGroup(-20);
+                handler.postDelayed(this, 50);
+            }
+        };
+
+        View.OnTouchListener adjustTouch = new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+                Runnable adjustRunnable = (view.getId() == R.id.leftAdjust) ? adjustLeftRunnable : adjustRightRunnable;
+                if(motionEvent.getAction() == MotionEvent.ACTION_DOWN){
+                    handler.post(adjustRunnable);
+                    return true;
+                } else if(motionEvent.getAction() == MotionEvent.ACTION_UP){
+                    handler.removeCallbacks(adjustRunnable);
+                    return true;
+                }
+
+                return false;
+            }
+        };
+        ImageView leftAdjust = (ImageView)findViewById(R.id.leftAdjust);
+        leftAdjust.setOnTouchListener(adjustTouch);
+        leftAdjust.setColorFilter(Color.BLACK);
+        ImageView rightAdjust = (ImageView)findViewById(R.id.rightAdjust);
+        rightAdjust.setOnTouchListener(adjustTouch);
+        rightAdjust.setColorFilter(Color.BLACK);
+
+        adjustLayout = (LinearLayout)findViewById(R.id.adjustLayout);
 
         recordProgress = (RecorderCircle)findViewById(R.id.recordProgress);
         //recordProgress.setMax(4);
@@ -95,8 +141,6 @@ public class MainActivity extends ActionBarActivity {
                 return false;
             }
         });
-
-        recordProgress.setText("");
 
         loadFiles();
     }

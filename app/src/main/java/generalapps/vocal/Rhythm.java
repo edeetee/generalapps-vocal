@@ -20,4 +20,8 @@ public final class Rhythm {
         }
         return 0;
     }
+
+    public static int ticksToMs(int ticks){
+        return 1000*ticks/Recorder.FREQ;
+    }
 }

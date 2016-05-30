@@ -15,12 +15,27 @@
             android:layout_height="wrap_content"
             android:id="@+id/mainListView" />
 
-        <SeekBar
+        <LinearLayout
+            android:id="@+id/adjustLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_below="@id/mainListView"
-            android:id="@+id/lengthSeekBar"
-            android:progress="50"/>
+            android:weightSum="2"
+            android:orientation="horizontal"
+            android:layout_below="@id/mainListView">
+            <ImageView
+                android:id="@+id/leftAdjust"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_media_play"
+                android:scaleX="-1"
+                android:layout_weight="1"/>
+            <ImageView
+                android:id="@+id/rightAdjust"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_media_play"
+                android:layout_weight="1"/>
+        </LinearLayout>
 
         <generalapps.vocal.RecorderCircle
             android:id="@+id/recordProgress"

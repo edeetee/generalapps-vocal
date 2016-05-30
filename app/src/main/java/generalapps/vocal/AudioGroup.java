@@ -22,7 +22,7 @@ public class AudioGroup implements Iterable<Audio> {
     Audio first;
     File dir;
     private int msBarPeriod;
-    private int msBarPeriodMod;
+    private int msBarPeriodMod = 0;
 
     public AudioGroup(Audio first){
         audios = new ArrayList<>();
@@ -62,8 +62,8 @@ public class AudioGroup implements Iterable<Audio> {
         updateMetadata();
     }
 
-    public void setMsBarPeriodMod(int msBarPeriodMod){
-        this.msBarPeriodMod = msBarPeriodMod;
+    public void changeMsBarPeriodMod(int msBarPeriodModChange){
+        this.msBarPeriodMod += msBarPeriodModChange;
         updateMetadata();
     }
 
@@ -201,13 +201,13 @@ public class AudioGroup implements Iterable<Audio> {
                 reader.close();
                 fileReader.close();
             } catch (IOException e){
-                e.printStackTrace();
+                Log.e("AudioGroup Load", "Loading failed during metadata parsing", e);
                 Utils.deleteDirectory(dir);
             }
 
             return new AudioGroup(dir, audios, msBarPeriod, msBarPeriodMod);
         } catch (Exception e){
-            e.printStackTrace();
+            Log.w("AudioGroup Load", "Something occured while loading files. Deleting...", e);
             Utils.deleteDirectory(dir);
         }
         return null;
@@ -223,9 +223,5 @@ public class AudioGroup implements Iterable<Audio> {
 
     public int maxTicks(){
         return msMaxPeriod()*Recorder.FREQ/1000;
-    }
-
-    public int ticksToMs(int ticks){
-        return 1000*ticks/Recorder.FREQ;
     }
 }

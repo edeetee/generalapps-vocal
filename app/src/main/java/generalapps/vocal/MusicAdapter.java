@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.os.Handler;
-import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
@@ -15,7 +14,6 @@ import android.widget.ListView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
-import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -29,7 +27,7 @@ public class MusicAdapter extends BaseAdapter {
     boolean playing = false;
     int beats = 0;
     ToneGenerator toneGenerator = new ToneGenerator(AudioManager.STREAM_MUSIC, 20);
-    Timer timer = new Timer();
+    Handler handler = new Handler();
 
     private boolean recordAtEnd;
     private boolean stopAtEnd;
@@ -68,7 +66,6 @@ public class MusicAdapter extends BaseAdapter {
         }
     };
 
-    private Handler progressHandler = new Handler();
     long startTime;
 
     public float getProgress(){
@@ -90,8 +87,6 @@ public class MusicAdapter extends BaseAdapter {
     }
 
     public void play() {
-        updateBarLengthSeekBar();
-
         if (playing || getCount() == 0)
             return;
 
@@ -113,11 +108,13 @@ public class MusicAdapter extends BaseAdapter {
         }
 
         beats = 0;
-        timer.scheduleAtFixedRate(new TimerTask() {
+        handler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 if (!playing)
-                    cancel();
+                    handler.removeCallbacks(this);
+                else
+                    handler.postDelayed(this, group.msBeatPeriod());
                 beats = (beats+1)%Rhythm.maxBeats();
                 updateAudios();
                 if(recordAtEnd){
@@ -132,11 +129,13 @@ public class MusicAdapter extends BaseAdapter {
                     }
                 }
             }
-        }, group.msBeatPeriod(), group.msBeatPeriod());
+        }, group.msBeatPeriod());
     }
 
     public void updateAudios(){
         if(getCount() != 0){
+            //update starttime to reset to start when editing first bar length
+            startTime = System.currentTimeMillis()-group.msBeatPeriod()*beats;
             for(Audio audio : group){
                 if(audio.canPlay()){
                     if(beats % (audio.bars*Rhythm.bpb) == 0){
@@ -154,8 +153,6 @@ public class MusicAdapter extends BaseAdapter {
     }
 
     public void stop(){
-        updateBarLengthSeekBar();
-
         if(!playing)
             return;
 
@@ -198,7 +195,7 @@ public class MusicAdapter extends BaseAdapter {
     @Override
     public void notifyDataSetChanged() {
         super.notifyDataSetChanged();
-        updateBarLengthSeekBar();
+        updateAdjustButtons();
     }
 
     @Override
@@ -207,32 +204,14 @@ public class MusicAdapter extends BaseAdapter {
         stop();
     }
 
-    private void updateBarLengthSeekBar(){
-        if(getCount() == 1 && !playing){
-            MainActivity.lengthSeekBar.setVisibility(View.VISIBLE);
-            MainActivity.lengthSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+    public void adjustGroup(int adjustement){
+        group.changeMsBarPeriodMod(adjustement);
+        notifyDataSetChanged();
+        group.get(0).waveValues.updateObservers();
+    }
 
-                @Override
-                public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
-                    float pos = (float)(-i+50)/50;
-                    group.setMsBarPeriodMod(Math.round(pos * 2000));
-                    notifyDataSetChanged();
-                    group.get(0).waveValues.updateObservers();
-                }
-
-                @Override
-                public void onStartTrackingTouch(SeekBar seekBar) {
-
-                }
-
-                @Override
-                public void onStopTrackingTouch(SeekBar seekBar) {
-
-                }
-            });
-        } else {
-            MainActivity.lengthSeekBar.setVisibility(View.INVISIBLE);
-        }
+    private void updateAdjustButtons(){
+        MainActivity.adjustLayout.setVisibility((getCount() == 1) ? View.VISIBLE : View.INVISIBLE);
     }
 
     @Override
