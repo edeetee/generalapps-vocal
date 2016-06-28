@@ -2,21 +2,16 @@ package generalapps.vocal;
 
 import android.content.Context;
 import android.content.res.TypedArray;
-import android.database.DataSetObservable;
-import android.database.DataSetObserver;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
-import android.provider.ContactsContract;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
 
 import java.util.ArrayList;
-import java.util.List;
-import java.util.logging.Level;
 
 /**
  * Created by edeetee on 27/04/2016.
@@ -25,52 +20,41 @@ import java.util.logging.Level;
 public class WaveView extends View {
     //struct for points
     public static class WaveValues extends ArrayList<Float> {
-        static private List<WaveValues> waves = new ArrayList<>();
-        List<DataSetObserver> observers = new ArrayList<>();
-        private float maxVal = 0;
+        public interface OnMaxWaveValueChangedListener {
+            void OnMaxWaveValueChanged(float max);
+            float GetMaxWaveValue();
+        }
+        OnMaxWaveValueChangedListener mListener;
+        public float localMax = 0f;
 
         public WaveValues() {
             super();
-            waves.add(this);
+        }
+
+        public void setOnMaxWaveValueChangedListener(OnMaxWaveValueChangedListener listener){
+            mListener = listener;
+            mListener.OnMaxWaveValueChanged(localMax);
         }
 
         @Override
         public boolean add(Float object) {
-            if(maxVal < object)
-                maxVal = object;
-
-            return super.add(object);
-        }
-
-        public synchronized void updateObservers(){
-            for(DataSetObserver observer : observers){
-                observer.onChanged();
+            if(localMax < object){
+                localMax = object;
+                if(mListener != null)
+                    mListener.OnMaxWaveValueChanged(localMax);
             }
-        }
-
-        public synchronized void registerDataSetObserver(DataSetObserver observer){
-            observers.add(observer);
+            return super.add(object);
         }
 
         @Override
         public Float get(int index) {
-            return super.get(index)/getMax();
-        }
-
-        private float getMax(){
-            float max = 0f;
-            for(WaveValues wave : waves){
-                if(max < wave.maxVal)
-                    max = wave.maxVal;
+            if(mListener != null)
+                return super.get(index)/mListener.GetMaxWaveValue();
+            else
+            {
+                Log.w("WaveView.WaveValues", "no Listener on get call. Falling back to localMax");
+                return super.get(index)/localMax;
             }
-            return max;
-        }
-
-        @Override
-        public void clear() {
-            //if has been added
-            maxVal = 0;
-            super.clear();
         }
 
         @Override
@@ -80,6 +64,7 @@ public class WaveView extends View {
     }
 
     private Audio audio;
+    private RecorderAdapter adapter;
 
     static int points = 200;
     static int[] BARCOLORS = {Color.CYAN, Color.BLUE};//, Color.GREEN, Color.MAGENTA};
@@ -130,20 +115,16 @@ public class WaveView extends View {
     public void setAudio(Audio audio){
         if(!audio.equals(this.audio)){
             this.audio = audio;
-            audio.waveValues.registerDataSetObserver(new DataSetObserver() {
-                @Override
-                public void onChanged() {
-                    super.onChanged();
-                    updateWave();
-                    postInvalidate();
-                }
-            });
         }
     }
 
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
+    }
+
+    protected void setAdapter(RecorderAdapter adapter) {
+        this.adapter = adapter;
     }
 
     public void updateWave(){
@@ -229,8 +210,8 @@ public class WaveView extends View {
 
             canvas.drawPath(wavePath, audio.enabled ? wavePaint : disabledWavePaint);
 
-            if(MainActivity.adapter.playing){
-                float x = w*MainActivity.adapter.getProgress();
+            if(adapter.playing){
+                float x = w*adapter.getProgress();
                 canvas.drawLine(x, h, x, 0, progressPaint);
                 //redraw
                 postInvalidate();

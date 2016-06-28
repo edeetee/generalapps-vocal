@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:custom="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootLayout"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:clipChildren="false">
+    <ListView
+        android:minWidth="25dp"
+        android:minHeight="25dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@android:id/list" />
+
+    <LinearLayout
+        android:id="@+id/adjustLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:weightSum="2"
+        android:orientation="horizontal"
+        android:layout_below="@android:id/list">
+        <ImageView
+            android:id="@+id/leftAdjust"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@android:drawable/ic_media_play"
+            android:scaleX="-1"
+            android:layout_weight="1"/>
+        <ImageView
+            android:id="@+id/rightAdjust"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@android:drawable/ic_media_play"
+            android:layout_weight="1"/>
+    </LinearLayout>
+
+    <generalapps.vocal.RecorderCircle
+        android:id="@+id/recordProgress"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:layout_width="150dp"
+        android:layout_height="150dp"
+        android:hapticFeedbackEnabled="false"
+        custom:donut_progress="0"
+        custom:donut_text_size="60dp"
+        custom:donut_inner_bottom_text="Play/Record"
+        custom:donut_inner_bottom_text_size="10dp"
+        custom:donut_max="4"/>
+
+    <generalapps.vocal.ColorView
+        android:id="@+id/blackTint"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="true"
+        android:visibility="invisible"/>
+</RelativeLayout>

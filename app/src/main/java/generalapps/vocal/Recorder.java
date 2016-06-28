@@ -7,7 +7,6 @@ import android.media.MediaRecorder;
 import android.os.Handler;
 import android.util.JsonWriter;
 import android.util.Log;
-import android.widget.ListView;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -15,15 +14,7 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.Stack;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.logging.Logger;
 
 import generalapps.vocal.audioGen.AudioGenerator;
 
@@ -43,37 +34,51 @@ public class Recorder {
     Thread recordingThread;
     File audioFile;
     String timeString;
-    Activity context;
     private Audio audio;
     int ticks;
     //0 == 1. 1and2and3and4and (music signature)
     int beats = 0;
-    List<Float> wavePoints;
     int buffer;
     static int FREQ = 44100;
 
     long recordingStart;
     boolean first = false;
-    AudioGroup group;
+    Track group;
+
+    interface OnRecorderStateChangeListener{
+        void OnRecorderStateChange(State state);
+    }
+    OnRecorderStateChangeListener mCallback;
 
     public Recorder(Activity context){
-        this.context = context;
-
         handler = new Handler();
         toneGenerator = new AudioGenerator(1000, FREQ/16, FREQ);
     }
 
-    public void record(){
-        prepareRecord();
+    void setOnRecorderStateChangeListener(OnRecorderStateChangeListener callback){
+        mCallback = callback;
+    }
+
+    public State getState(){
+        return state;
+    }
+
+    void setState(State state){
+        this.state = state;
+        if(mCallback != null)
+            mCallback.OnRecorderStateChange(state);
+    }
+
+    public void record(RecorderFragment frag){
+        prepareRecord(frag.adapter);
 
         if(!first)
-            startRecordingBeatIn();
+            startRecordingBeatIn(frag.recordProgress);
         else
             startRecording();
     }
 
-    public void prepareRecord(){
-        MusicAdapter adapter = MainActivity.adapter;
+    public void prepareRecord(RecorderAdapter adapter){
         group = adapter.group;
         first = group == null;
 
@@ -83,7 +88,7 @@ public class Recorder {
         audio.setName(timeString);
         if(first){
             audio.setBars(1);
-            group = new AudioGroup(audio);
+            group = new Track(audio, adapter);
         } else {
             adapter.group.add(audio);
         }
@@ -104,29 +109,31 @@ public class Recorder {
             }
         }, "AudioRecorder Thread");
 
-        state = state.PREPARED;
+        setState(State.PREPARED);
     }
 
     //region countDown
-    private void startRecordingCountDown(){
-        MainActivity.recordProgress.setDoHighText(true);
+    private void startRecordingCountDown(RecorderCircle recordProgress){
+        recordProgress.setDoHighText(true);
         countDownRunnable = new CountDownRunnable();
-        MainActivity.recordProgress.post(countDownRunnable);
+        countDownRunnable.recordProgress = recordProgress;
+        recordProgress.post(countDownRunnable);
     }
 
     CountDownRunnable countDownRunnable;
     private class CountDownRunnable implements Runnable {
         int count = 3;
+        RecorderCircle recordProgress;
         @Override
         public void run() {
-            MainActivity.recordProgress.postDelayed(this, 500);
+            recordProgress.postDelayed(this, 500);
             if(count == 0){
-                MainActivity.recordProgress.setText("Go");
+                recordProgress.setText("Go");
                 startRecording();
-                MainActivity.recordProgress.removeCallbacks(this);
+                recordProgress.removeCallbacks(this);
                 count = 3;
             } else {
-                MainActivity.recordProgress.setBeat(count);
+                recordProgress.setBeat(count);
                 count--;
             }
         }
@@ -134,46 +141,50 @@ public class Recorder {
     //endregion
 
     //region beatIn
-    public void startRecordingBeatIn(){
-        MainActivity.recordProgress.setDoHighText(true);
-        MainActivity.recordProgress.doLoop(group);
+    public void startRecordingBeatIn(RecorderCircle recordProgress){
+        recordProgress.setDoHighText(true);
+        recordProgress.doLoop(group);
         beatInRunnable = new BeatInRunnable();
-        MainActivity.recordProgress.post(beatInRunnable);
+        beatInRunnable.recordProgress = recordProgress;
+        recordProgress.post(beatInRunnable);
     }
 
     BeatInRunnable beatInRunnable;
     private class BeatInRunnable implements Runnable {
         //cache current beats value
         int beat = 0;
+        RecorderCircle recordProgress;
         @Override
         public void run() {
-            MainActivity.recordProgress.postDelayed(this, group.msBeatPeriod());
+            recordProgress.postDelayed(this, group.msBeatPeriod());
 
             if(beat < Rhythm.bpb){
                 toneGenerator.play();
-                MainActivity.recordProgress.doHeartBeat(group.msBeatPeriod()/4);
-                MainActivity.recordProgress.setBeat(beat+1);
+                recordProgress.doHeartBeat(group.msBeatPeriod()/4);
+                recordProgress.setBeat(beat+1);
                 beat++;
             } else{
-                MainActivity.recordProgress.stopLoop();
-                MainActivity.recordProgress.removeCallbacks(this);
+                recordProgress.stopLoop();
+                recordProgress.removeCallbacks(this);
                 beat = 0;
-                startRecordingBeat();
+                startRecordingBeat(recordProgress);
             }
         }
     };
     //endregion
 
     //region beat
-    private void startRecordingBeat(){
-        MainActivity.recordProgress.doLoop(group);
+    private void startRecordingBeat(RecorderCircle recordProgress){
+        recordProgress.doLoop(group);
         beatRunnable = new BeatRunnable();
+        beatRunnable.recordProgress = recordProgress;
         handler.post(beatRunnable);
         startRecording();
     }
 
     BeatRunnable beatRunnable ;
     private class BeatRunnable implements Runnable {
+        RecorderCircle recordProgress;
         @Override
         public void run() {
             if (beats == Rhythm.bpb*Rhythm.maxBars){
@@ -183,16 +194,16 @@ public class Recorder {
                 handler.postDelayed(this, group.msBeatPeriod());
 
                 //update record button beat value
-                MainActivity.recordProgress.post(new Runnable() {
+                recordProgress.post(new Runnable() {
                     //cache current beats value
                     int curBeats = beats;
                     @Override
                     public void run() {
-                        MainActivity.recordProgress.setBeat(curBeats%Rhythm.bpb+1);
+                        recordProgress.setBeat(curBeats%Rhythm.bpb+1);
                     }
                 });
 
-                MainActivity.recordProgress.doHeartBeat(group.msBeatPeriod()/4);
+                recordProgress.doHeartBeat(group.msBeatPeriod()/4);
 
                 beats++;
             }
@@ -209,7 +220,7 @@ public class Recorder {
     }
 
     private void writeAudioDataToFile() {
-        state = State.RECORDING;
+        setState(State.RECORDING);
 
         short sData[] = new short[buffer/2];
 
@@ -256,7 +267,7 @@ public class Recorder {
                     }
                 }
                 audio.setTicks(ticks);
-                audio.waveValues.updateObservers();
+                group.invalidateWaves();
             }
 
         }
@@ -278,10 +289,6 @@ public class Recorder {
         return bytes;
     }
 
-    public State getState(){
-        return state;
-    }
-
     private boolean isLongEnough(){
         return 500 < System.currentTimeMillis() - recordingStart;
     }
@@ -290,7 +297,7 @@ public class Recorder {
         //if the recording did not start, remove the empty audio view
         if(state == State.RECORDING && isLongEnough()){
             if(first){
-                MainActivity.adapter.group.setMsBarPeriod(Rhythm.ticksToMs(ticks));
+                group.setMsBarPeriod(Rhythm.ticksToMs(ticks));
             } else{
                 audio.autoSetBar();
             }
@@ -299,14 +306,8 @@ public class Recorder {
         }
 
         handler.removeCallbacks(beatRunnable);
-        MainActivity.recordProgress.removeCallbacks(beatInRunnable);
-        MainActivity.recordProgress.removeCallbacks(countDownRunnable);
 
-        MainActivity.recordProgress.setDoHighText(false);
-        MainActivity.recordProgress.stopLoop();
-        MainActivity.recordProgress.setText("");
-
-        state = State.ENDING;
+        setState(State.ENDING);
 
         if(recordingThread.isAlive()){
             try{
@@ -335,7 +336,7 @@ public class Recorder {
         ticks = 0;
         recordingThread = null;
 
-        state = State.NONE;
+        setState(State.NONE);
     }
 
     public File writeMetaData() {

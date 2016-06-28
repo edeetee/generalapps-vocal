@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <TextView
+        android:layout_alignParentBottom="true"
+        android:id="@+id/createNew"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Create new"
+        android:textSize="25sp"/>
+    <ListView
+        android:layout_above="@id/createNew"
+        android:minWidth="25dp"
+        android:minHeight="25dp"
+        android:id="@android:id/list"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+</RelativeLayout>

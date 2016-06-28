@@ -4,7 +4,6 @@ import android.util.JsonReader;
 import android.util.JsonWriter;
 import android.util.Log;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -16,7 +15,7 @@ import java.util.List;
 /**
  * Created by edeetee on 11/05/2016.
  */
-public class AudioGroup implements Iterable<Audio> {
+public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener, WaveView.WaveValues.OnMaxWaveValueChangedListener {
     private List<Audio> audios;
     private File metaData;
     Audio first;
@@ -24,24 +23,58 @@ public class AudioGroup implements Iterable<Audio> {
     private int msBarPeriod;
     private int msBarPeriodMod = 0;
 
-    public AudioGroup(Audio first){
+    OnTrackChangeListener mCallback;
+
+    @Override
+    public void OnChange() {
+        if(mCallback != null)
+            mCallback.OnChange();
+    }
+
+    private float maxWaveVal = 0f;
+
+    @Override
+    public void OnMaxWaveValueChanged(float max) {
+        if(maxWaveVal < max){
+            maxWaveVal = max;
+        }
+    }
+
+    @Override
+    public float GetMaxWaveValue() {
+        return maxWaveVal;
+    }
+
+    public void invalidateWaves(){
+        for(Audio audio : audios){
+            if(audio.view != null)
+                audio.view.findViewById(R.id.waveform).postInvalidate();
+        }
+    }
+
+    public interface OnTrackChangeListener{
+        void OnChange();
+        void OnDelete();
+    }
+
+    public Track(Audio first, RecorderAdapter callback){
         audios = new ArrayList<>();
 
         //manually add just for first value
-        first.group = this;
+        first.setTrack(this);
         this.first = first;
         audios.add(first);
-
-        MainActivity.adapter.setGroup(this);
+        mCallback = callback;
+        callback.group = this;
 
         generateDir();
         changed();
     }
 
     //only for use with load() static func
-    private AudioGroup(File dir, List<Audio> audios, int msBarPeriod, int msBarPeriodMod){
+    private Track(File dir, List<Audio> audios, int msBarPeriod, int msBarPeriodMod, RecorderAdapter callback){
         for(Audio audio : audios){
-            audio.group = this;
+            audio.setTrack(this);
         }
         this.first = audios.get(0);
         this.audios = audios;
@@ -49,7 +82,8 @@ public class AudioGroup implements Iterable<Audio> {
         this.msBarPeriodMod = msBarPeriodMod;
         this.dir = dir;
 
-        MainActivity.adapter.setGroup(this);
+        mCallback = callback;
+        callback.group = this;
     }
 
     @Override
@@ -63,7 +97,8 @@ public class AudioGroup implements Iterable<Audio> {
     }
 
     public void changeMsBarPeriodMod(int msBarPeriodModChange){
-        this.msBarPeriodMod += msBarPeriodModChange;
+        int newMsBarPeriodMod = this.msBarPeriodMod + msBarPeriodModChange;
+        msBarPeriodMod = (int)Math.min(Math.max(-msBarPeriod*0.9, newMsBarPeriodMod), msBarPeriod*0.9);
         updateMetadata();
     }
 
@@ -72,7 +107,7 @@ public class AudioGroup implements Iterable<Audio> {
     }
 
     public void add(Audio audio){
-        audio.group = this;
+        audio.setTrack(this);
         audios.add(audio);
         changed();
     }
@@ -82,13 +117,8 @@ public class AudioGroup implements Iterable<Audio> {
     }
 
     private void changed(){
-        MainActivity.adapter.notifyDataSetChanged();
-        MainActivity.context.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                MainActivity.adapter.notifyDataSetChanged();
-            }
-        });
+        if(mCallback != null)
+            mCallback.OnChange();
         updateMetadata();
     }
 
@@ -107,8 +137,8 @@ public class AudioGroup implements Iterable<Audio> {
     }
 
     public void delete(){
-        if(MainActivity.adapter.playing)
-            MainActivity.adapter.stop();
+        if(mCallback != null)
+            mCallback.OnDelete();
 
         for(Audio audio : audios){
             audio.delete();
@@ -118,9 +148,7 @@ public class AudioGroup implements Iterable<Audio> {
         if(metaData != null)
             metaData.delete();
         if(dir != null)
-            dir.delete();
-        MainActivity.adapter.notifyDataSetInvalidated();
-        MainActivity.adapter.group = null;
+            Utils.deleteDirectory(dir);
     }
 
     public int size(){
@@ -164,7 +192,7 @@ public class AudioGroup implements Iterable<Audio> {
 
     }
 
-    static AudioGroup load(File dir){
+    static Track load(File dir, RecorderAdapter callback){
         try{
             File groupMetaData = new File(dir, "group.json");
             Utils.printFile("load", groupMetaData);
@@ -182,7 +210,9 @@ public class AudioGroup implements Iterable<Audio> {
                             reader.beginArray();
 
                             while(reader.hasNext()){
-                                audios.add(Audio.loadAudio(dir, reader.nextString()));
+                                Audio curAudio = Audio.loadAudio(dir, reader.nextString());
+                                if(curAudio != null)
+                                    audios.add(curAudio);
                             }
 
                             reader.endArray();
@@ -202,13 +232,13 @@ public class AudioGroup implements Iterable<Audio> {
                 fileReader.close();
             } catch (IOException e){
                 Log.e("AudioGroup Load", "Loading failed during metadata parsing", e);
-                Utils.deleteDirectory(dir);
+                //Utils.deleteDirectory(dir);
             }
 
-            return new AudioGroup(dir, audios, msBarPeriod, msBarPeriodMod);
+            return new Track(dir, audios, msBarPeriod, msBarPeriodMod, callback);
         } catch (Exception e){
             Log.w("AudioGroup Load", "Something occured while loading files. Deleting...", e);
-            Utils.deleteDirectory(dir);
+            //Utils.deleteDirectory(dir);
         }
         return null;
     }

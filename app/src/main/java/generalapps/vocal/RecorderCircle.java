@@ -1,17 +1,12 @@
 package generalapps.vocal;
 
-import android.app.ActionBar;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.text.TextUtils;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.ViewGroup;
 
 import generalapps.vocal.com.github.lzyzsd.circleprogress.DonutProgress;
-
-import java.util.Timer;
-import java.util.TimerTask;
 
 /**
  * Created by edeetee on 1/05/2016.
@@ -22,7 +17,7 @@ public class RecorderCircle extends DonutProgress {
     boolean inBeat = false;
     boolean doHighText = false;
     boolean doLoop = false;
-    AudioGroup loopGroup;
+    Track loopGroup;
     int startSize;
     int heartBeatLength;
 
@@ -114,7 +109,7 @@ public class RecorderCircle extends DonutProgress {
         setText(Integer.toString(beats));
     }
 
-    public void doLoop(AudioGroup group){
+    public void doLoop(Track group){
         doLoop = true;
         loopGroup = group;
         postInvalidate();

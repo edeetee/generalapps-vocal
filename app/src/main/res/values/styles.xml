@@ -5,4 +5,9 @@
         <!-- Customize your theme here. -->
     </style>
 
+    <style name="EffectList">
+        <item name="android:layout_width">20dp</item>
+        <item name="android:layout_height">100dp</item>
+    </style>
+
 </resources>

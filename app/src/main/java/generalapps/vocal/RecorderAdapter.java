@@ -1,41 +1,59 @@
 package generalapps.vocal;
 
-import android.app.Activity;
-import android.media.AudioManager;
-import android.media.ToneGenerator;
 import android.os.Handler;
+import android.support.v4.view.ViewPager;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewParent;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.ListView;
-import android.widget.SeekBar;
 import android.widget.TextView;
 
-import java.util.Timer;
-import java.util.TimerTask;
+import generalapps.vocal.effects.EffectCategory;
 
 /**
  * Created by edeetee on 13/04/2016.
  */
-public class MusicAdapter extends BaseAdapter {
+public class RecorderAdapter extends BaseAdapter implements Track.OnTrackChangeListener {
 
-    AudioGroup group;
-    Activity context;
+    Track group;
     boolean playing = false;
     int beats = 0;
-    ToneGenerator toneGenerator = new ToneGenerator(AudioManager.STREAM_MUSIC, 20);
     Handler handler = new Handler();
 
     private boolean recordAtEnd;
     private boolean stopAtEnd;
 
+    interface OnMusicAdapterChangeListener{
+        void Play();
+        void Stop();
+        void ItemsChanged(int count);
+    }
+    OnMusicAdapterChangeListener mCallback;
+    EffectCategoryPagerAdapter.OnEffectCategorySelectedListener mEffectCategoryListener;
+
+    @Override
+    public void OnChange() {
+        MainActivity.context.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                notifyDataSetChanged();
+            }
+        });
+    }
+
+    @Override
+    public void OnDelete() {
+        if(playing)
+            stop();
+        notifyDataSetInvalidated();
+        group = null;
+    }
+
     View.OnClickListener infoClick = new View.OnClickListener() {
         @Override
         public void onClick(View v) {
-            int pos = getInnerViewPosition(v);
+            int pos = Utils.getInnerViewPosition(v);
             Audio audio = group.get(pos);
             audio.setEnabled(!audio.enabled);
 
@@ -47,11 +65,11 @@ public class MusicAdapter extends BaseAdapter {
     Button.OnClickListener deleteClick = new Button.OnClickListener(){
         @Override
         public void onClick(View v){
-            int pos = getInnerViewPosition(v);
+            int pos = Utils.getInnerViewPosition(v);
             if(pos == 0){
                 group.delete();
                 group = null;
-                notifyDataSetChanged();
+                MainActivity.context.fragManager.popBackStack();
             } else
                 group.remove(pos);
         }
@@ -60,7 +78,7 @@ public class MusicAdapter extends BaseAdapter {
     View.OnClickListener barsClick = new View.OnClickListener() {
         @Override
         public void onClick(View v) {
-            int pos = getInnerViewPosition(v);
+            int pos = Utils.getInnerViewPosition(v);
             Audio audio = group.get(pos);
             audio.toggleRoundBarToNext();
         }
@@ -72,31 +90,18 @@ public class MusicAdapter extends BaseAdapter {
         return (float)(System.currentTimeMillis()-startTime)/group.msMaxPeriod() % 1;
     }
 
-    public MusicAdapter(Activity context, AudioGroup group) {
-        this.context = context;
-        this.group = group;
+    public <T extends OnMusicAdapterChangeListener & EffectCategoryPagerAdapter.OnEffectCategorySelectedListener> RecorderAdapter(T callback){
+        mCallback = callback;
+        mEffectCategoryListener = callback;
     }
 
-    public MusicAdapter(Activity context){
-        this.context = context;
-    }
-
-    public void setGroup(AudioGroup group){
-        this.group = group;
-        notifyDataSetChanged();
-    }
-
-    public void play() {
+    public void play(RecorderCircle recordProgress) {
         if (playing || getCount() == 0)
             return;
 
 
-        MainActivity.recordProgress.post(new Runnable() {
-            @Override
-            public void run() {
-                MainActivity.recordProgress.setInnerBottomText("Stop");
-            }
-        });
+        if(mCallback != null)
+            mCallback.Play();
 
         playing = true;
         startTime = System.currentTimeMillis();
@@ -104,33 +109,46 @@ public class MusicAdapter extends BaseAdapter {
         for (int i = 0; i < getCount(); i++) {
             Audio audio = group.get(i);
             audio.play();
-            audio.view.findViewById(R.id.waveform).postInvalidate();
+            final WaveView waveForm = (WaveView)audio.view.findViewById(R.id.waveform);
+            waveForm.post(new Runnable() {
+                @Override
+                public void run() {
+                    waveForm.postInvalidate();
+                }
+            });
         }
 
         beats = 0;
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (!playing)
-                    handler.removeCallbacks(this);
-                else
-                    handler.postDelayed(this, group.msBeatPeriod());
-                beats = (beats+1)%Rhythm.maxBeats();
-                updateAudios();
-                if(recordAtEnd){
-                    //if was too close to end
-                    if(beats == Rhythm.bpb*(Rhythm.maxBars-1)){
-                        stopAtEnd = true;
-                        MainActivity.recorder.startRecordingBeatIn();
-                    } else if(beats == 0 && stopAtEnd){
-                        stopAtEnd = false;
-                        recordAtEnd = false;
-                        stop();
-                    }
+
+        playRunnable = new PlayRunnable();
+        playRunnable.recordProgress = recordProgress;
+        handler.postDelayed(playRunnable, group.msBeatPeriod());
+    }
+
+    PlayRunnable playRunnable;
+    class PlayRunnable implements Runnable {
+        public RecorderCircle recordProgress;
+        @Override
+        public void run() {
+            if (!playing)
+                handler.removeCallbacks(this);
+            else
+                handler.postDelayed(this, group.msBeatPeriod());
+            beats = (beats+1)%Rhythm.maxBeats();
+            updateAudios();
+            if(recordAtEnd){
+                //if was too close to end
+                if(beats == Rhythm.bpb*(Rhythm.maxBars-1)){
+                    stopAtEnd = true;
+                    MainActivity.recorder.startRecordingBeatIn(recordProgress);
+                } else if(beats == 0 && stopAtEnd){
+                    stopAtEnd = false;
+                    recordAtEnd = false;
+                    stop();
                 }
             }
-        }, group.msBeatPeriod());
-    }
+        }
+    };
 
     public void updateAudios(){
         if(getCount() != 0){
@@ -143,7 +161,7 @@ public class MusicAdapter extends BaseAdapter {
                     }
                 }
             }
-            context.runOnUiThread(new Runnable() {
+            MainActivity.context.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
                     notifyDataSetChanged();
@@ -159,12 +177,10 @@ public class MusicAdapter extends BaseAdapter {
         playing = false;
         beats = 0;
 
-        MainActivity.recordProgress.post(new Runnable() {
-            @Override
-            public void run() {
-                MainActivity.recordProgress.setInnerBottomText("Play/Record");
-            }
-        });
+        if(mCallback != null)
+            mCallback.Stop();
+
+        handler.removeCallbacks(playRunnable);
 
         for(Audio audio : group){
             if(audio.canPlay())
@@ -173,7 +189,7 @@ public class MusicAdapter extends BaseAdapter {
     }
 
     public void recordAtEnd(){
-        MainActivity.recorder.prepareRecord();
+        MainActivity.recorder.prepareRecord(this);
         recordAtEnd = true;
     }
 
@@ -195,7 +211,8 @@ public class MusicAdapter extends BaseAdapter {
     @Override
     public void notifyDataSetChanged() {
         super.notifyDataSetChanged();
-        updateAdjustButtons();
+        if(mCallback != null)
+            mCallback.ItemsChanged(getCount());
     }
 
     @Override
@@ -204,20 +221,17 @@ public class MusicAdapter extends BaseAdapter {
         stop();
     }
 
-    public void adjustGroup(int adjustement){
-        group.changeMsBarPeriodMod(adjustement);
-        notifyDataSetChanged();
-        group.get(0).waveValues.updateObservers();
-    }
-
-    private void updateAdjustButtons(){
-        MainActivity.adjustLayout.setVisibility((getCount() == 1) ? View.VISIBLE : View.INVISIBLE);
+    public void adjustGroup(int adjustment){
+        group.changeMsBarPeriodMod(adjustment);
+        WaveView wave = (WaveView)group.first.view.findViewById(R.id.waveform);
+        wave.updateWave();
+        wave.postInvalidate();
     }
 
     @Override
     public View getView(final int position, View convertView, ViewGroup parent) {
         if(convertView == null){
-            convertView = context.getLayoutInflater().inflate(R.layout.audio_list_view, parent, false);
+            convertView = MainActivity.context.getLayoutInflater().inflate(R.layout.audio_list_view, parent, false);
         }
 
         Audio audio = group.get(position);
@@ -233,32 +247,25 @@ public class MusicAdapter extends BaseAdapter {
             delete.setText("Delete (All)");
         }else{
             delete.setText("Delete");
-
         }
         delete.setOnClickListener(deleteClick);
 
         TextView bars = (TextView)convertView.findViewById(R.id.bars);
         bars.setOnClickListener(barsClick);
 
+        ViewPager effectCategorySelector = (ViewPager)convertView.findViewById(R.id.effectCategoryPager);
+        if(effectCategorySelector.getAdapter() == null)
+            effectCategorySelector.setAdapter(new EffectCategoryPagerAdapter(convertView.getContext(), mEffectCategoryListener));
+
         if(audio.waveValues != null){
             WaveView waveView = (WaveView)convertView.findViewById(R.id.waveform);
             waveView.setAudio(audio);
+            waveView.setAdapter(this);
             waveView.invalidate();
         }
 
         audio.setBars();
 
         return convertView;
-    }
-
-    int getInnerViewPosition(View v){
-        ViewParent parent = v.getParent();
-        while(parent != null){
-            if(parent.getClass().equals(ListView.class))
-                break;
-            parent = parent.getParent();
-        }
-        ListView listView = (ListView)parent;
-        return listView.getPositionForView(v);
     }
 }

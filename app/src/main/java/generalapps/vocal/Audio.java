@@ -1,8 +1,6 @@
 package generalapps.vocal;
 
-import android.media.AudioFormat;
 import android.media.AudioManager;
-import android.media.AudioTrack;
 import android.util.JsonReader;
 import android.util.Log;
 import android.view.View;
@@ -12,14 +10,30 @@ import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.ByteOrder;
+
+import be.tarsos.dsp.AudioDispatcher;
+import be.tarsos.dsp.AudioEvent;
+import be.tarsos.dsp.AudioProcessor;
+import be.tarsos.dsp.io.TarsosDSPAudioFormat;
+import be.tarsos.dsp.io.TarsosDSPAudioInputStream;
+import be.tarsos.dsp.io.UniversalAudioInputStream;
+import be.tarsos.dsp.io.android.AndroidAudioPlayer;
+import be.tarsos.dsp.resample.RateTransposer;
+import be.tarsos.dsp.resample.Resampler;
 
 /**
  * Created by edeetee on 13/04/2016.
  */
-public class Audio extends AudioTrack {
-    AudioTrack track;
+public class Audio implements AudioProcessor {
+    AudioDispatcher dispatcher;
+    Thread dispatcherThread;
+    TarsosDSPAudioInputStream input;
+    AndroidAudioPlayer audioPlayer;
+
     String name;
     File audioFile;
     File metaData;
@@ -27,17 +41,29 @@ public class Audio extends AudioTrack {
     int ticks;
     int maxBeats;
 
-    WaveView.WaveValues waveValues = new WaveView.WaveValues();
+    State state;
+    double timeStamp;
+
+    public interface OnAudioChangeListener {
+        void OnChange();
+    }
+    OnAudioChangeListener mCallback;
+    WaveView.WaveValues.OnMaxWaveValueChangedListener mMaxCallback;
+
+    WaveView.WaveValues waveValues;
 
     View view;
-    AudioGroup group;
+    Track group;
     //is audio enabled in ui
     boolean enabled = true;
     boolean roundBarToNext = true;
 
     public Audio(){
         //TODO make AudioGroup and Audio constructors linked so that Recorder.FREQ*Rhythm.msMaxPeriod()/1000 can be used for buffer
-        super(AudioManager.STREAM_MUSIC, Recorder.FREQ, AudioFormat.CHANNEL_OUT_DEFAULT, AudioFormat.ENCODING_PCM_16BIT, 1000000, AudioTrack.MODE_STATIC);
+        state = State.UNLOADED;
+        waveValues = new WaveView.WaveValues();
+        //super(AudioManager.STREAM_MUSIC, Recorder.FREQ, AudioFormat.CHANNEL_OUT_DEFAULT, AudioFormat.ENCODING_PCM_16BIT, 1000000, AudioTrack.MODE_STATIC);
+        //super(new TarsosDSPAudioFormat(Recorder.FREQ, 16, 1, true, true), 500000, AudioManager.STREAM_MUSIC);
     }
 
     public Audio(File metaData){
@@ -48,6 +74,12 @@ public class Audio extends AudioTrack {
     public Audio(File audio, File metaData){
         this(metaData);
         setFile(audio);
+    }
+
+    public void setTrack(Track callback){
+        group = callback;
+        mCallback = callback;
+        waveValues.setOnMaxWaveValueChangedListener(callback);
     }
 
     public void setName(){
@@ -101,11 +133,13 @@ public class Audio extends AudioTrack {
             e.printStackTrace();
         }
 
-        invalidateAdapter();
+        if(mCallback != null)
+            mCallback.OnChange();
     }
 
     public void setFile(File audioFile){
         this.audioFile = audioFile;
+
         int length = (int)audioFile.length();
         ticks = length/2;
         byte[] bytes = new byte[length];
@@ -113,7 +147,6 @@ public class Audio extends AudioTrack {
         try {
             BufferedInputStream buf = new BufferedInputStream(new FileInputStream(audioFile));
             buf.read(bytes, 0, length);
-            buf.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -132,11 +165,54 @@ public class Audio extends AudioTrack {
             }
         }
 
-        int written = write(shortBuf, 0, ticks);
-        if(written < ticks)
-            Log.e("AudioWrite", "Audio write failed. Length: " + Integer.toString(ticks) + ", Written: " + Integer.toString(written));
+        loadDispatcher();
 
-        setNotificationMarkerPosition(ticks);
+        state = State.LOADED;
+
+//        int written = write(shortBuf, 0, ticks);
+//        if(written < ticks)
+//            Log.e("AudioWrite", "Audio write failed. Length: " + Integer.toString(ticks) + ", Written: " + Integer.toString(written));
+
+        //setNotificationMarkerPosition(ticks);
+    }
+
+    public void loadDispatcher(){
+        final double tempo = 1.0;
+        //WaveformSimilarityBasedOverlapAdd wsola = new WaveformSimilarityBasedOverlapAdd(WaveformSimilarityBasedOverlapAdd.Parameters.musicDefaults(tempo, Recorder.FREQ));
+
+        final int audioBufferSize = 2048;
+        final int overlap = audioBufferSize - audioBufferSize/16;
+        TarsosDSPAudioFormat format = new TarsosDSPAudioFormat(Recorder.FREQ, 16, 1, true, ByteOrder.nativeOrder().equals(ByteOrder.BIG_ENDIAN));
+        try{
+            input = new UniversalAudioInputStream(new BufferedInputStream(new FileInputStream(audioFile)), format);
+        } catch (FileNotFoundException e){
+            Log.e("Audio", "File not found", e);
+        }
+        dispatcher = new AudioDispatcher(input, audioBufferSize, overlap);
+
+        //wsola.setDispatcher(dispatcher);
+        //foreach effect
+        audioPlayer = new AndroidAudioPlayer(format, 10000, AudioManager.STREAM_MUSIC);
+        //processor = new PitchShifter(dispatcher, tempo, Recorder.FREQ, audioBufferSize, audioBufferSize - audioBufferSize/8);
+        //pitchShifter = new PitchShifterNew(tempo, Recorder.FREQ, audioBufferSize, overlap);
+        dispatcher.addAudioProcessor(this);
+        //dispatcher.addAudioProcessor(wsola);
+        //dispatcher.addAudioProcessor(pitchShifter);
+        dispatcher.addAudioProcessor(audioPlayer);
+
+        dispatcherThread = new Thread(dispatcher, name + " player thread");
+    }
+
+    @Override
+    public boolean process(AudioEvent audioEvent) {
+        timeStamp = audioEvent.getTimeStamp();
+        return true;
+    }
+
+    @Override
+    public void processingFinished() {
+        loadDispatcher();
+        state = State.LOADED;
     }
 
     @Override
@@ -145,26 +221,35 @@ public class Audio extends AudioTrack {
     }
 
     public boolean isPlaying(){
-        return getPlayState() == PLAYSTATE_PLAYING;
+        return state == State.PLAYING;
     }
 
     public boolean canPlay(){
         return enabled && audioFile != null && metaData != null;
     }
 
-    @Override
     public void play() throws IllegalStateException {
-        if(canPlay())
-            super.play();
+        if(canPlay()){
+            if(state == State.LOADED)
+                dispatcherThread.start();
+            else
+                Log.e("Audio", "Incorrect state: " + state.name());
+            state = State.PLAYING;
+        }
         else
             Log.w("'Hol up", "Audio name:" + name + " is not loaded and/or enabled");
+    }
+
+    public void stop(){
+        if(dispatcher != null)
+            dispatcher.stop();
     }
 
     public void restart(){
         if(isPlaying())
             stop();
-        if(getPlaybackHeadPosition() != 0)
-            setPlaybackHeadPosition(0);
+        if(timeStamp != 0)
+            dispatcher.skip(0);
         play();
     }
 
@@ -177,8 +262,14 @@ public class Audio extends AudioTrack {
 
     public void setBars(int bars){
         this.bars = bars;
-        invalidateAdapter();
-        waveValues.updateObservers();
+        if(view != null){
+            WaveView wave = (WaveView)view.findViewById(R.id.waveform);
+            wave.updateWave();
+            wave.postInvalidate();
+            view.findViewById(R.id.bars).postInvalidate();
+        }
+//        if(view != null)
+//            view.findViewById(R.id.waveform).postInvalidate();
     }
 
     public void setTicks(int ticks){
@@ -210,21 +301,9 @@ public class Audio extends AudioTrack {
         setRoundBarToNext(!roundBarToNext);
     }
 
-    public void invalidateAdapter(){
-        if(MainActivity.adapter != null){
-            MainActivity.context.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    MainActivity.adapter.notifyDataSetChanged();
-                }
-            });
-        }
-    }
-
     public void delete(){
         try{
             stop();
-            release();
         } catch (IllegalStateException e){
             Log.w("IllegalState", "Audio " + name + " is in an illegal state. Continuing with delete.");
 
@@ -237,18 +316,29 @@ public class Audio extends AudioTrack {
     }
 
     public static Audio loadAudio(File dir, final String name){
-        File metaFile = dir.listFiles(new FileFilter() {
-            @Override
-            public boolean accept(File file) {
-                return file.getName().equals(name + ".json");
-            }
-        })[0];
-        File audioFile = dir.listFiles(new FileFilter() {
-            @Override
-            public boolean accept(File file) {
-                return file.getName().equals(name + ".wav");
-            }
-        })[0];
-        return new Audio(audioFile, metaFile);
+        try{
+            File metaFile = dir.listFiles(new FileFilter() {
+                @Override
+                public boolean accept(File file) {
+                    return file.getName().equals(name + ".json");
+                }
+            })[0];
+            File audioFile = dir.listFiles(new FileFilter() {
+                @Override
+                public boolean accept(File file) {
+                    return file.getName().equals(name + ".wav");
+                }
+            })[0];
+            return new Audio(audioFile, metaFile);
+        } catch(Exception e){
+            Log.e("Audio", "Load file " + name + " failure.", e);
+            return null;
+        }
+    }
+
+    public enum State{
+        UNLOADED,
+        LOADED,
+        PLAYING
     }
 }
