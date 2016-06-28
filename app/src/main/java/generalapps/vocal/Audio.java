@@ -14,6 +14,8 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.ByteOrder;
+import java.util.Arrays;
+import java.util.List;
 
 import be.tarsos.dsp.AudioDispatcher;
 import be.tarsos.dsp.AudioEvent;
@@ -24,11 +26,14 @@ import be.tarsos.dsp.io.UniversalAudioInputStream;
 import be.tarsos.dsp.io.android.AndroidAudioPlayer;
 import be.tarsos.dsp.resample.RateTransposer;
 import be.tarsos.dsp.resample.Resampler;
+import generalapps.vocal.effects.Effect;
+import generalapps.vocal.effects.EffectCategory;
 
 /**
  * Created by edeetee on 13/04/2016.
  */
-public class Audio implements AudioProcessor {
+public class Audio implements
+        AudioProcessor{
     AudioDispatcher dispatcher;
     Thread dispatcherThread;
     TarsosDSPAudioInputStream input;
@@ -43,6 +48,14 @@ public class Audio implements AudioProcessor {
 
     State state;
     double timeStamp;
+
+    static List<EffectCategory> categories = EffectCategory.getDefault();
+    public EffectCategory effectCategory;
+    public Effect effect;
+
+    public interface AudioEffectApplier{
+        void Apply(AudioDispatcher dispatcher, int bufferSize);
+    }
 
     public interface OnAudioChangeListener {
         void OnChange();
@@ -105,6 +118,14 @@ public class Audio implements AudioProcessor {
         this.metaData = metaData;
         readMetaData();
         maxBeats = bars * Rhythm.bpb;
+    }
+
+    public void setEffect(Effect effect){
+        if(effectCategory.mEffects.contains(effect)){
+            this.effect = effect;
+            loadDispatcher();
+        } else
+            Log.e("Audio", "setEffect effect is not in the current category");
     }
 
     public void readMetaData(){
@@ -192,7 +213,10 @@ public class Audio implements AudioProcessor {
 
         //wsola.setDispatcher(dispatcher);
         //foreach effect
-        audioPlayer = new AndroidAudioPlayer(format, 10000, AudioManager.STREAM_MUSIC);
+        audioPlayer = new AndroidAudioPlayer(format, audioBufferSize, AudioManager.STREAM_MUSIC);
+        if(effect != null){
+            effect.mProcessor.Apply(dispatcher, audioBufferSize);
+        }
         //processor = new PitchShifter(dispatcher, tempo, Recorder.FREQ, audioBufferSize, audioBufferSize - audioBufferSize/8);
         //pitchShifter = new PitchShifterNew(tempo, Recorder.FREQ, audioBufferSize, overlap);
         dispatcher.addAudioProcessor(this);

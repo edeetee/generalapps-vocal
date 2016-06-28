@@ -39,7 +39,7 @@ public class Recorder {
     //0 == 1. 1and2and3and4and (music signature)
     int beats = 0;
     int buffer;
-    static int FREQ = 44100;
+    static public int FREQ = 44100;
 
     long recordingStart;
     boolean first = false;

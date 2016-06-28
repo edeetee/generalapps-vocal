@@ -16,9 +16,9 @@ import generalapps.vocal.effects.EffectCategory;
  * Created by edeetee on 27/06/2016.
  */
 public class EffectCategoryPagerAdapter extends PagerAdapter {
-    List<EffectCategory> effects = Arrays.asList(EffectCategory.none, EffectCategory.micTest);
 
     private Context mContext;
+    Audio mAudio;
 
     public <T extends OnEffectCategorySelectedListener> EffectCategoryPagerAdapter(Context context, T listener) {
         mContext = context;
@@ -26,8 +26,8 @@ public class EffectCategoryPagerAdapter extends PagerAdapter {
     }
 
     @Override
-    public Object instantiateItem(ViewGroup collection, int position) {
-        final EffectCategory category = effects.get(position);
+    public Object instantiateItem(ViewGroup collection, final int position) {
+        final EffectCategory category = Audio.categories.get(position);
         LayoutInflater inflater = LayoutInflater.from(mContext);
         ImageView view = new ImageView(mContext);
         view.setImageResource(category.mIconId);
@@ -45,7 +45,7 @@ public class EffectCategoryPagerAdapter extends PagerAdapter {
 
     @Override
     public int getCount() {
-        return effects.size();
+        return Audio.categories.size();
     }
 
     @Override

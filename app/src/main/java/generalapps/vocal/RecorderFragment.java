@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Bundle;
+import android.support.v4.view.ViewPager;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -24,8 +25,7 @@ import generalapps.vocal.effects.EffectCategory;
 public class RecorderFragment extends ListFragment implements
         RecorderAdapter.OnMusicAdapterChangeListener,
         Recorder.OnRecorderStateChangeListener,
-        EffectCategoryPagerAdapter.OnEffectCategorySelectedListener,
-        EffectAdapter.OnEffectSelectedListener{
+        EffectCategoryPagerAdapter.OnEffectCategorySelectedListener{
 
     public static final String FILE_KEY = "track_key";
 
@@ -60,10 +60,30 @@ public class RecorderFragment extends ListFragment implements
     }
 
     @Override
-    public void OnEffectCategorySelected(View item, EffectCategory category) {
+    public void OnEffectCategorySelected(View item, final EffectCategory category) {
         if(category.hasChildren()){
+            ListView list = getListView();
+            int audioPos = list.getPositionForView(item);
+            final Audio audio = (Audio)adapter.getItem(audioPos);
+            final ViewPager pager = (ViewPager)item.getParent();
+
             effectPager = new SnappingListView(context);
-            effectPager.setAdapter(new EffectAdapter(item.getContext(), this, category));
+            effectPager.setVerticalFadingEdgeEnabled(true);
+            effectPager.setAdapter(new EffectAdapter(item.getContext(), new EffectAdapter.OnEffectSelectedListener() {
+                @Override
+                public void OnEffectSelected(View item, Effect effect) {
+                    if(effect.mProcessor != null){
+                        audio.effectCategory = category;
+                        audio.setEffect(effect);
+                        ((ImageView)item).setColorFilter(Color.GREEN);
+                    } else {
+                        pager.setCurrentItem(0, false);
+                        pager.postInvalidate();
+                    }
+                    rootLayout.removeView(effectPager);
+                    rootLayout.findViewById(R.id.blackTint).setVisibility(View.INVISIBLE);
+                }
+            }, category));
             effectPager.setSelection(EffectAdapter.HALF_MAX_VALUE);
 
             final Rect alignRect = new Rect();
@@ -76,17 +96,11 @@ public class RecorderFragment extends ListFragment implements
             int height = width*5;
             RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(width, height);
             params.leftMargin = alignRect.left - rootRect.left;
-            params.topMargin = alignRect.top - rootRect.top - params.height/2;
+            params.topMargin = Math.max(alignRect.top - rootRect.top - params.height/2, 0);
             rootLayout.addView(effectPager, params);
 
             rootLayout.findViewById(R.id.blackTint).setVisibility(View.VISIBLE);
         }
-    }
-
-    @Override
-    public void OnEffectSelected(View item, Effect category) {
-        rootLayout.removeView(effectPager);
-        rootLayout.findViewById(R.id.blackTint).setVisibility(View.INVISIBLE);
     }
 
     @Override

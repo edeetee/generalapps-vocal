@@ -56,13 +56,13 @@ public class EffectAdapter extends BaseAdapter {
             image.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
+
                     mListener.OnEffectSelected(view, effect);
                 }
             });
             layout.addView(image);
             layout.setBackgroundResource(R.drawable.round_rect_shape);
         }
-
 
         return view;
     }
@@ -73,7 +73,7 @@ public class EffectAdapter extends BaseAdapter {
     }
 
     public interface OnEffectSelectedListener{
-        void OnEffectSelected(View item, Effect category);
+        void OnEffectSelected(View item, Effect effect);
     }
     public OnEffectSelectedListener mListener;
 }
