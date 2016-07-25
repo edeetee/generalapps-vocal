@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.app.FragmentTransaction;
+import android.app.Fragment;
 import android.support.v4.content.ContextCompat;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
@@ -74,5 +75,16 @@ public class MainActivity extends AppCompatActivity implements TracksAdapter.Tra
         transaction.addToBackStack(null);
 
         transaction.commit();
+    }
+
+    @Override
+    public void onBackPressed() {
+        try{
+            BackOverrideFragment curRecorder = (BackOverrideFragment)getFragmentManager().findFragmentByTag(RECORDER_FRAGMENT_TAG);
+            if(curRecorder != null && curRecorder.processBackPressed())
+                super.onBackPressed();
+        } catch (ClassCastException e) {
+            super.onBackPressed();
+        }
     }
 }

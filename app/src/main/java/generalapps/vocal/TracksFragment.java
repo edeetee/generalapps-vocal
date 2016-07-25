@@ -9,6 +9,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
+import com.github.clans.fab.FloatingActionButton;
+
 import java.io.File;
 import java.io.FileFilter;
 import java.util.ArrayList;
@@ -45,7 +47,7 @@ public class TracksFragment extends ListFragment {
 
         setListAdapter(adapter);
 
-        TextView createNew = (TextView)fragView.findViewById(R.id.createNew);
+        FloatingActionButton createNew = (FloatingActionButton)fragView.findViewById(R.id.FABnew);
         createNew.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {

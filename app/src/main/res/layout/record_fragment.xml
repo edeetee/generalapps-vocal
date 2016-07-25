@@ -2,15 +2,15 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:custom="http://schemas.android.com/apk/res-auto"
     android:id="@+id/rootLayout"
-    android:layout_width="fill_parent"
-    android:layout_height="fill_parent"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
     android:clipChildren="true">
-    <ListView
+    <android.support.v7.widget.RecyclerView
         android:minWidth="25dp"
         android:minHeight="25dp"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:id="@android:id/list" />
+        android:id="@+id/mainRecycler"/>
 
     <LinearLayout
         android:id="@+id/adjustLayout"
@@ -18,7 +18,7 @@
         android:layout_height="wrap_content"
         android:weightSum="2"
         android:orientation="horizontal"
-        android:layout_below="@android:id/list">
+        android:layout_below="@+id/mainRecycler">
         <ImageView
             android:id="@+id/leftAdjust"
             android:layout_width="wrap_content"

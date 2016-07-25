@@ -5,13 +5,11 @@ import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.os.Handler;
-import android.util.JsonWriter;
 import android.util.Log;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -87,7 +85,6 @@ public class Recorder {
         audio = new Audio();
         audio.setName(timeString);
         if(first){
-            audio.setBars(1);
             group = new Track(audio, adapter);
         } else {
             adapter.group.add(audio);
@@ -254,22 +251,19 @@ public class Recorder {
                 e.printStackTrace();
             }
 
-            ticks += buffer/2;
-            if(!first){
-                //generate wave values
-                for(int i = 0; i<buffer/2; i++){
-                    //weird stuff to stop overloading values
-                    sum += Math.abs(sData[i]/(float)Short.MAX_VALUE);
+            //generate wave values
+            for(int i = 0; i<buffer/2; i++){
+                //weird stuff to stop overloading values
+                sum += Math.abs(sData[i]/(float)Short.MAX_VALUE);
 
-                    if((ticks+i) % (group.maxTicks()/WaveView.points) == 0){
-                        audio.waveValues.add(sum);
-                        sum = 0f;
-                    }
+                if((ticks+i) % WaveView.tickInterval == 0){
+                    audio.waveValues.add(sum/WaveView.tickInterval);
+                    sum = 0f;
                 }
-                audio.setTicks(ticks);
-                group.invalidateWaves();
             }
-
+            ticks += buffer/2;
+            audio.setTicks(ticks);
+            audio.holder.barTemplateAdapter.postInvalidateCurrent();
         }
         try {
             os.close();
@@ -296,11 +290,7 @@ public class Recorder {
     public void stop(){
         //if the recording did not start, remove the empty audio view
         if(state == State.RECORDING && isLongEnough()){
-            if(first){
-                group.setMsBarPeriod(Rhythm.ticksToMs(ticks));
-            } else{
-                audio.autoSetBar();
-            }
+
         } else{
             group.remove(audio);
         }
@@ -321,9 +311,8 @@ public class Recorder {
 
     private void postStop(){
         if(isLongEnough()){
-            File metaData = writeMetaData();
-            audio.setMetaData(metaData);
-            audio.setFile(audioFile);
+            audio.writeMetaData();
+            audio.writeFile(audioFile);
         }
 
         recorder.stop();
@@ -337,30 +326,5 @@ public class Recorder {
         recordingThread = null;
 
         setState(State.NONE);
-    }
-
-    public File writeMetaData() {
-        File metaData = new File(group.dir, timeString + ".json");
-        try {
-            FileWriter file = new FileWriter(metaData);
-            JsonWriter writer = new JsonWriter(file);
-            writer.beginObject();
-
-            writer.name("Bars");
-            writer.value(audio.bars);
-
-            writer.name("First");
-            writer.value(first);
-
-            writer.name("Title");
-            writer.value(timeString);
-
-            writer.endObject();
-            writer.close();
-            file.close();
-        } catch (IOException e){
-            e.printStackTrace();
-        }
-        return metaData;
     }
 }

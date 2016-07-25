@@ -1,20 +1,22 @@
 package generalapps.vocal;
 
+import android.media.AudioFormat;
 import android.media.AudioManager;
-import android.util.JsonReader;
+import android.media.AudioTrack;
 import android.util.Log;
-import android.view.View;
-import android.widget.TextView;
+import android.widget.Toast;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.ByteOrder;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 import be.tarsos.dsp.AudioDispatcher;
@@ -24,10 +26,9 @@ import be.tarsos.dsp.io.TarsosDSPAudioFormat;
 import be.tarsos.dsp.io.TarsosDSPAudioInputStream;
 import be.tarsos.dsp.io.UniversalAudioInputStream;
 import be.tarsos.dsp.io.android.AndroidAudioPlayer;
-import be.tarsos.dsp.resample.RateTransposer;
-import be.tarsos.dsp.resample.Resampler;
 import generalapps.vocal.effects.Effect;
 import generalapps.vocal.effects.EffectCategory;
+import generalapps.vocal.templates.BarTemplate;
 
 /**
  * Created by edeetee on 13/04/2016.
@@ -38,45 +39,39 @@ public class Audio implements
     Thread dispatcherThread;
     TarsosDSPAudioInputStream input;
     AndroidAudioPlayer audioPlayer;
+    TarsosDSPAudioFormat format = new TarsosDSPAudioFormat(Recorder.FREQ, 16, 1, true, ByteOrder.nativeOrder().equals(ByteOrder.BIG_ENDIAN));
 
     String name;
     File audioFile;
     File metaData;
-    int bars = 1;
     int ticks;
     int maxBeats;
 
     State state;
-    double timeStamp;
 
-    static List<EffectCategory> categories = EffectCategory.getDefault();
-    public EffectCategory effectCategory;
-    public Effect effect;
+    public Effect effect = Effect.none;
+    public BarTemplate barTemplate = new BarTemplate(1, true, true, true, true);
 
     public interface AudioEffectApplier{
         void Apply(AudioDispatcher dispatcher, int bufferSize);
     }
 
     public interface OnAudioChangeListener {
-        void OnChange();
+        void OnChange(Audio audio);
     }
     OnAudioChangeListener mCallback;
-    WaveView.WaveValues.OnMaxWaveValueChangedListener mMaxCallback;
 
-    WaveView.WaveValues waveValues;
+    List<Float> waveValues;
 
-    View view;
+    public RecorderAdapter.AudioHolder holder;
     Track group;
     //is audio enabled in ui
-    boolean enabled = true;
-    boolean roundBarToNext = true;
+    public boolean enabled = true;
 
     public Audio(){
         //TODO make AudioGroup and Audio constructors linked so that Recorder.FREQ*Rhythm.msMaxPeriod()/1000 can be used for buffer
         state = State.UNLOADED;
-        waveValues = new WaveView.WaveValues();
-        //super(AudioManager.STREAM_MUSIC, Recorder.FREQ, AudioFormat.CHANNEL_OUT_DEFAULT, AudioFormat.ENCODING_PCM_16BIT, 1000000, AudioTrack.MODE_STATIC);
-        //super(new TarsosDSPAudioFormat(Recorder.FREQ, 16, 1, true, true), 500000, AudioManager.STREAM_MUSIC);
+        waveValues = new ArrayList<Float>();
     }
 
     public Audio(File metaData){
@@ -86,25 +81,17 @@ public class Audio implements
 
     public Audio(File audio, File metaData){
         this(metaData);
-        setFile(audio);
+        writeFile(audio);
     }
 
     public void setTrack(Track callback){
         group = callback;
         mCallback = callback;
-        waveValues.setOnMaxWaveValueChangedListener(callback);
-    }
-
-    public void setName(){
-        if(view != null){
-            TextView textView = (TextView)view.findViewById(R.id.name);
-            textView.setText(name);
-        }
+        //waveValues.setOnMaxWaveValueChangedListener(callback);
     }
 
     public void setName(String name){
         this.name = name;
-        setName();
     }
 
     public void setEnabled(boolean enabled){
@@ -112,53 +99,64 @@ public class Audio implements
             stop();
 
         this.enabled = enabled;
+        holder.barTemplateAdapter.notifyDataSetChanged();
     }
 
     public void setMetaData(File metaData){
         this.metaData = metaData;
         readMetaData();
-        maxBeats = bars * Rhythm.bpb;
     }
 
     public void setEffect(Effect effect){
-        if(effectCategory.mEffects.contains(effect)){
-            this.effect = effect;
-            loadDispatcher();
-        } else
-            Log.e("Audio", "setEffect effect is not in the current category");
+        this.effect = effect;
+        loadDispatcher();
+        writeMetaData();
+        if(effect != Effect.none){
+            Toast toast = Toast.makeText(holder.itemView.getContext(), "Effect selected " + holder.itemView.getContext().getResources().getResourceName(effect.mIcon), Toast.LENGTH_SHORT);
+            toast.show();
+        }
     }
 
     public void readMetaData(){
+        JSONObject metaObj = Utils.loadJSON(metaData, "Audio load: ");
         try{
-            FileReader fileReader = new FileReader(metaData);
-            JsonReader reader = new JsonReader(fileReader);
-            reader.beginObject();
-            while(reader.hasNext()){
-                String curName = reader.nextName();
-                switch (curName){
-                    case "Bars":
-                        bars = reader.nextInt();
-                        break;
-                    case "Title":
-                        name = reader.nextString();
-                        break;
-                    default:
-                        reader.skipValue();
-                }
-            }
-            reader.endObject();
-            reader.close();
-            fileReader.close();
-
-        } catch(IOException e){
-            e.printStackTrace();
+            name = metaObj.getString("Title");
+            barTemplate = BarTemplate.deSerialize(metaObj.getJSONObject("BarTemplate"));
+            effect = Effect.deSerialize(metaObj.getJSONObject("Effect"));
+        } catch(JSONException e){
+            Log.e("Audio", "readMetaData", e);
         }
 
         if(mCallback != null)
-            mCallback.OnChange();
+            mCallback.OnChange(this);
     }
 
-    public void setFile(File audioFile){
+    public File writeMetaData() {
+        try{
+            File metaData = new File(group.dir, name + ".json");
+            JSONObject metaObj = new JSONObject();
+
+            metaObj.put("Title", name);
+            metaObj.put("Effect", effect.serialize());
+            metaObj.put("BarTemplate", barTemplate.serialize());
+
+            String output = metaObj.toString();
+
+            FileWriter writer = new FileWriter(metaData);
+            writer.write(output);
+            writer.flush();
+            writer.close();
+
+            Utils.printFile("Audio write", metaData);
+
+            return metaData;
+        } catch(Exception e){
+            Log.e("Track", "updateMetadata", e);
+            return null;
+        }
+    }
+
+    public void writeFile(File audioFile){
         this.audioFile = audioFile;
 
         int length = (int)audioFile.length();
@@ -180,8 +178,8 @@ public class Audio implements
             //weird stuff to stop overloading values
             sum += Math.abs(val/(float)Short.MAX_VALUE);
 
-            if(i % (ticks/WaveView.points) == 0){
-                waveValues.add(sum);
+            if(i % WaveView.tickInterval == 0){
+                waveValues.add(sum/WaveView.tickInterval);
                 sum = 0;
             }
         }
@@ -189,39 +187,25 @@ public class Audio implements
         loadDispatcher();
 
         state = State.LOADED;
-
-//        int written = write(shortBuf, 0, ticks);
-//        if(written < ticks)
-//            Log.e("AudioWrite", "Audio write failed. Length: " + Integer.toString(ticks) + ", Written: " + Integer.toString(written));
-
-        //setNotificationMarkerPosition(ticks);
     }
 
     public void loadDispatcher(){
-        final double tempo = 1.0;
-        //WaveformSimilarityBasedOverlapAdd wsola = new WaveformSimilarityBasedOverlapAdd(WaveformSimilarityBasedOverlapAdd.Parameters.musicDefaults(tempo, Recorder.FREQ));
-
-        final int audioBufferSize = 2048;
-        final int overlap = audioBufferSize - audioBufferSize/16;
-        TarsosDSPAudioFormat format = new TarsosDSPAudioFormat(Recorder.FREQ, 16, 1, true, ByteOrder.nativeOrder().equals(ByteOrder.BIG_ENDIAN));
+        int audioBufferSize = AudioTrack.getMinBufferSize((int)format.getSampleRate(), AudioFormat.CHANNEL_OUT_MONO,  AudioFormat.ENCODING_PCM_16BIT)/(format.getSampleSizeInBits()/8);
+        //raise to next pow2
+        audioBufferSize = (int)Math.pow(2, Math.ceil(Math.log(audioBufferSize)/Math.log(2)));
+        int overlap = audioBufferSize - audioBufferSize/16;
         try{
             input = new UniversalAudioInputStream(new BufferedInputStream(new FileInputStream(audioFile)), format);
-        } catch (FileNotFoundException e){
-            Log.e("Audio", "File not found", e);
+        } catch(IOException e){
+            Log.e("Audio", "Input loading", e);
         }
         dispatcher = new AudioDispatcher(input, audioBufferSize, overlap);
 
-        //wsola.setDispatcher(dispatcher);
-        //foreach effect
         audioPlayer = new AndroidAudioPlayer(format, audioBufferSize, AudioManager.STREAM_MUSIC);
-        if(effect != null){
+        if(effect.mProcessor != null){
             effect.mProcessor.Apply(dispatcher, audioBufferSize);
         }
-        //processor = new PitchShifter(dispatcher, tempo, Recorder.FREQ, audioBufferSize, audioBufferSize - audioBufferSize/8);
-        //pitchShifter = new PitchShifterNew(tempo, Recorder.FREQ, audioBufferSize, overlap);
         dispatcher.addAudioProcessor(this);
-        //dispatcher.addAudioProcessor(wsola);
-        //dispatcher.addAudioProcessor(pitchShifter);
         dispatcher.addAudioProcessor(audioPlayer);
 
         dispatcherThread = new Thread(dispatcher, name + " player thread");
@@ -229,7 +213,10 @@ public class Audio implements
 
     @Override
     public boolean process(AudioEvent audioEvent) {
-        timeStamp = audioEvent.getTimeStamp();
+        if(group.barTicks()*barTemplate.mRecordingLength < audioEvent.getSamplesProcessed()){
+            stop();
+            return false;
+        }
         return true;
     }
 
@@ -265,64 +252,25 @@ public class Audio implements
     }
 
     public void stop(){
-        if(dispatcher != null)
+        if(dispatcher != null){
             dispatcher.stop();
+            state = State.LOADED;
+        }
     }
 
     public void restart(){
         if(isPlaying())
             stop();
-        if(timeStamp != 0)
-            dispatcher.skip(0);
         play();
     }
 
-    public void setBars(){
-        if(view != null){
-            TextView barsView = (TextView)view.findViewById(R.id.bars);
-            barsView.setText(Integer.toString(bars) +  (bars == 1 ? " Bar" : " Bars"));
-        }
-    }
-
-    public void setBars(int bars){
-        this.bars = bars;
-        if(view != null){
-            WaveView wave = (WaveView)view.findViewById(R.id.waveform);
-            wave.updateWave();
-            wave.postInvalidate();
-            view.findViewById(R.id.bars).postInvalidate();
-        }
-//        if(view != null)
-//            view.findViewById(R.id.waveform).postInvalidate();
+    public void setBarTemplate(BarTemplate barTemplate){
+        this.barTemplate = barTemplate;
+        writeMetaData();
     }
 
     public void setTicks(int ticks){
         this.ticks = ticks;
-        autoSetBar();
-    }
-
-    public void autoSetBar(){
-        float calcBars = Rhythm.maxBars*ticks/group.maxTicks();
-        int prevBar = 1;
-        int nextBar = 1;
-        for(int bars : Rhythm.barTypes){
-            prevBar = nextBar;
-            nextBar = bars;
-
-            if(calcBars < nextBar)
-                break;
-        }
-        setBars(roundBarToNext ? nextBar : prevBar);
-    }
-
-    //if roundBarToNext is true, the bar length will emcompass the whole length, otherwise it will clip
-    public void setRoundBarToNext(boolean roundBarToNext){
-        this.roundBarToNext = roundBarToNext;
-        autoSetBar();
-    }
-
-    public void toggleRoundBarToNext(){
-        setRoundBarToNext(!roundBarToNext);
     }
 
     public void delete(){

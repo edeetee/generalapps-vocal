@@ -1,31 +1,33 @@
 package generalapps.vocal;
 
-import android.app.ListFragment;
+import android.app.Fragment;
 import android.content.Context;
 import android.graphics.Color;
-import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Bundle;
-import android.support.v4.view.ViewPager;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ListView;
 import android.widget.RelativeLayout;
 
 import java.io.File;
 
 import generalapps.vocal.effects.Effect;
+import generalapps.vocal.effects.EffectAdapter;
 import generalapps.vocal.effects.EffectCategory;
 
 
-public class RecorderFragment extends ListFragment implements
+public class RecorderFragment extends Fragment implements
+        BackOverrideFragment,
         RecorderAdapter.OnMusicAdapterChangeListener,
         Recorder.OnRecorderStateChangeListener,
-        EffectCategoryPagerAdapter.OnEffectCategorySelectedListener{
+        OnEffectCategoryChangeListener,
+        EffectAdapter.OnEffectSelectedListener{
 
     public static final String FILE_KEY = "track_key";
 
@@ -33,8 +35,10 @@ public class RecorderFragment extends ListFragment implements
     Context context;
     RecorderCircle recordProgress;
     LinearLayout adjustLayout;
-    ListView effectPager;
     RelativeLayout rootLayout;
+    RecyclerView recycler;
+    ColorView blackTint;
+    File file;
 
     static WaveView testThis;
 
@@ -60,54 +64,34 @@ public class RecorderFragment extends ListFragment implements
     }
 
     @Override
-    public void OnEffectCategorySelected(View item, final EffectCategory category) {
-        if(category.hasChildren()){
-            ListView list = getListView();
-            int audioPos = list.getPositionForView(item);
-            final Audio audio = (Audio)adapter.getItem(audioPos);
-            final ViewPager pager = (ViewPager)item.getParent();
+    public void OnEffectSelected(Effect effect) {
+        effectSelection = null;
+        blackTint.setVisibility(View.INVISIBLE);
+    }
 
-            effectPager = new SnappingListView(context);
-            effectPager.setVerticalFadingEdgeEnabled(true);
-            effectPager.setAdapter(new EffectAdapter(item.getContext(), new EffectAdapter.OnEffectSelectedListener() {
-                @Override
-                public void OnEffectSelected(View item, Effect effect) {
-                    if(effect.mProcessor != null){
-                        audio.effectCategory = category;
-                        audio.setEffect(effect);
-                        ((ImageView)item).setColorFilter(Color.GREEN);
-                    } else {
-                        pager.setCurrentItem(0, false);
-                        pager.postInvalidate();
-                    }
-                    rootLayout.removeView(effectPager);
-                    rootLayout.findViewById(R.id.blackTint).setVisibility(View.INVISIBLE);
-                }
-            }, category));
-            effectPager.setSelection(EffectAdapter.HALF_MAX_VALUE);
+    RecorderAdapter.AudioHolder effectSelection;
 
-            final Rect alignRect = new Rect();
-            final Rect rootRect = new Rect();
-            item.getGlobalVisibleRect(alignRect);
-            rootLayout.getGlobalVisibleRect(rootRect);
-
-            int widthDP = 35;
-            int width = Math.round(widthDP*Utils.getDpToPxMod(context));
-            int height = width*5;
-            RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(width, height);
-            params.leftMargin = alignRect.left - rootRect.left;
-            params.topMargin = Math.max(alignRect.top - rootRect.top - params.height/2, 0);
-            rootLayout.addView(effectPager, params);
-
-            rootLayout.findViewById(R.id.blackTint).setVisibility(View.VISIBLE);
+    @Override
+    public void OnEffectCategoryChanging(RecorderAdapter.AudioHolder holder) {
+        if(effectSelection == null){
+            effectSelection = holder;
+            blackTint.setVisibility(View.VISIBLE);
+            holder.setSpecialFloat(rootLayout);
         }
+    }
+
+    @Override
+    public boolean processBackPressed() {
+        if(effectSelection == null)
+            return true;
+
+        effectSelection.OnEffectSelected(Effect.none);
+        return false;
     }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        File file = null;
 
         if(savedInstanceState == null)
             savedInstanceState = getArguments();
@@ -115,12 +99,6 @@ public class RecorderFragment extends ListFragment implements
         if(savedInstanceState != null)
             if(savedInstanceState.containsKey(FILE_KEY))
                 file = new File(savedInstanceState.getString(FILE_KEY));
-
-        adapter = new RecorderAdapter(this);
-        setListAdapter(adapter);
-        if(file != null){
-            track = Track.load(file, adapter);
-        }
     }
 
     @Override
@@ -134,7 +112,24 @@ public class RecorderFragment extends ListFragment implements
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View fragView = inflater.inflate(R.layout.record_fragment, container, false);
 
+        recycler = (RecyclerView)fragView.findViewById(R.id.mainRecycler);
+        adapter = new RecorderAdapter(context, this);
+        if(file != null){
+            track = Track.load(file, adapter);
+        }
+        recycler.setAdapter(adapter);
+        recycler.setLayoutManager(new LinearLayoutManager(context));
+
         rootLayout = (RelativeLayout)fragView.findViewById(R.id.rootLayout);
+
+        blackTint = (ColorView)fragView.findViewById(R.id.blackTint);
+        blackTint.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if(effectSelection != null)
+                    effectSelection.OnEffectSelected(Effect.none);
+            }
+        });
 
         final Runnable adjustLeftRunnable = new Runnable() {
             @Override
@@ -174,7 +169,7 @@ public class RecorderFragment extends ListFragment implements
         rightAdjust.setColorFilter(Color.BLACK);
 
         adjustLayout = (LinearLayout)fragView.findViewById(R.id.adjustLayout);
-        setAdjustLayoutVisible(adapter.getCount() == 1);
+        setAdjustLayoutVisible(adapter.getItemCount() == 1);
 
         recordProgress = (RecorderCircle)fragView.findViewById(R.id.recordProgress);
         //recordProgress.setMax(4);
@@ -195,7 +190,7 @@ public class RecorderFragment extends ListFragment implements
             public boolean onLongClick(View v) {
                 //only if not first recording. First recording doesn't use longClick
                 Recorder.State state = MainActivity.recorder.getState();
-                if(adapter.getCount() != 0 && state == Recorder.State.NONE){
+                if(adapter.getItemCount() != 0 && state == Recorder.State.NONE){
                     if(!adapter.playing)
                         MainActivity.recorder.record(RecorderFragment.this);
                     else
@@ -217,7 +212,7 @@ public class RecorderFragment extends ListFragment implements
                     adapter.play(recordProgress);
                 }
                 //if first recording
-                if(state == Recorder.State.NONE && adapter.getCount() == 0 && action == MotionEvent.ACTION_DOWN){
+                if(state == Recorder.State.NONE && adapter.getItemCount() == 0 && action == MotionEvent.ACTION_DOWN){
                     MainActivity.recorder.record(RecorderFragment.this);
                 }
                 return false;

@@ -1,8 +1,16 @@
 package generalapps.vocal;
 
+import android.support.annotation.UiThread;
+import android.support.v7.widget.RecyclerView;
+import android.test.UiThreadTest;
 import android.util.JsonReader;
 import android.util.JsonWriter;
 import android.util.Log;
+import android.widget.Toast;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileReader;
@@ -15,45 +23,32 @@ import java.util.List;
 /**
  * Created by edeetee on 11/05/2016.
  */
-public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener, WaveView.WaveValues.OnMaxWaveValueChangedListener {
+public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener {
     private List<Audio> audios;
     private File metaData;
     Audio first;
     File dir;
-    private int msBarPeriod;
     private int msBarPeriodMod = 0;
 
     OnTrackChangeListener mCallback;
 
     @Override
-    public void OnChange() {
+    public void OnChange(Audio audio) {
         if(mCallback != null)
-            mCallback.OnChange();
-    }
-
-    private float maxWaveVal = 0f;
-
-    @Override
-    public void OnMaxWaveValueChanged(float max) {
-        if(maxWaveVal < max){
-            maxWaveVal = max;
-        }
-    }
-
-    @Override
-    public float GetMaxWaveValue() {
-        return maxWaveVal;
+            mCallback.OnChanged(audios.indexOf(audio));
     }
 
     public void invalidateWaves(){
         for(Audio audio : audios){
-            if(audio.view != null)
-                audio.view.findViewById(R.id.waveform).postInvalidate();
+            if(audio.holder != null)
+                audio.holder.barTemplateAdapter.postInvalidateCurrent();
         }
     }
 
     public interface OnTrackChangeListener{
-        void OnChange();
+        void OnAdd(int pos);
+        void OnRemoved(int pos);
+        void OnChanged(int pos);
         void OnDelete();
     }
 
@@ -68,17 +63,17 @@ public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener, Wave
         callback.group = this;
 
         generateDir();
-        changed();
+        mCallback.OnAdd(0);
+        updateMetadata();
     }
 
     //only for use with load() static func
-    private Track(File dir, List<Audio> audios, int msBarPeriod, int msBarPeriodMod, RecorderAdapter callback){
+    private Track(File dir, List<Audio> audios, int msBarPeriodMod, RecorderAdapter callback){
         for(Audio audio : audios){
             audio.setTrack(this);
         }
         this.first = audios.get(0);
         this.audios = audios;
-        this.msBarPeriod = msBarPeriod;
         this.msBarPeriodMod = msBarPeriodMod;
         this.dir = dir;
 
@@ -91,54 +86,48 @@ public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener, Wave
         return audios.iterator();
     }
 
-    public void setMsBarPeriod(int msBarPeriod){
-        this.msBarPeriod = msBarPeriod;
+    public void changeMsBarPeriodMod(int msBarPeriodModChange){
+        int newMsBarPeriodMod = this.msBarPeriodMod + msBarPeriodModChange;
+        msBarPeriodMod = (int)Math.min(Math.max(-getFirstBarPeriodMs()*0.9, newMsBarPeriodMod), getFirstBarPeriodMs()*0.9);
         updateMetadata();
     }
 
-    public void changeMsBarPeriodMod(int msBarPeriodModChange){
-        int newMsBarPeriodMod = this.msBarPeriodMod + msBarPeriodModChange;
-        msBarPeriodMod = (int)Math.min(Math.max(-msBarPeriod*0.9, newMsBarPeriodMod), msBarPeriod*0.9);
-        updateMetadata();
+    public int getFirstBarPeriodMs(){
+        return Rhythm.ticksToMs(first.ticks);
     }
 
     public int getMsBarPeriod(){
-        return msBarPeriod+msBarPeriodMod;
+        return getFirstBarPeriodMs()+msBarPeriodMod;
     }
 
     public void add(Audio audio){
         audio.setTrack(this);
         audios.add(audio);
-        changed();
+        mCallback.OnAdd(audios.size()-1);
+        updateMetadata();
     }
 
     public Audio get(int i){
         return audios.get(i);
     }
 
-    private void changed(){
-        if(mCallback != null)
-            mCallback.OnChange();
-        updateMetadata();
-    }
-
     public void remove(int i){
-        remove(audios.get(i));
-    }
-
-    public void remove(Audio audio){
-        if(audios.indexOf(audio) != 0){
-            audio.delete();
-            audios.remove(audio);
-            changed();
+        if(i != 0){
+            audios.get(i).delete();
+            audios.remove(i);
+            mCallback.OnRemoved(i);
+            updateMetadata();
         } else {
             delete();
         }
     }
 
+    public void remove(Audio audio){
+        remove(audios.indexOf(audio));
+    }
+
     public void delete(){
-        if(mCallback != null)
-            mCallback.OnDelete();
+        mCallback.OnDelete();
 
         for(Audio audio : audios){
             audio.delete();
@@ -161,84 +150,47 @@ public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener, Wave
     }
 
     private void updateMetadata(){
-        metaData = new File(dir, "group.json");
-        try {
-            JsonWriter writer = new JsonWriter(new FileWriter(metaData));
-
-            writer.beginObject();
-
-            writer.name("audios");
-            writer.beginArray();
+        try{
+            metaData = new File(dir, "group.json");
+            JSONObject metaObj = new JSONObject();
+            JSONArray JSONaudios = new JSONArray();
             for(Audio audio : audios){
-                writer.value(audio.name);
+                JSONaudios.put(audio.name);
             }
-            writer.endArray();
+            metaObj.put("audios", JSONaudios);
+            metaObj.put("msBarPeriodMod", msBarPeriodMod);
 
-            writer.name("msBarPeriod");
-            writer.value(msBarPeriod);
+            String output = metaObj.toString();
 
-            writer.name("msBarPeriodMod");
-            writer.value(msBarPeriodMod);
-
-            writer.endObject();
-
-            writer.close();
-
+            new FileWriter(metaData).write(output);
             Utils.printFile("write", metaData);
-        } catch (IOException e){
-            e.printStackTrace();
+        } catch(Exception e){
+            Log.e("Track", "updateMetadata", e);
         }
-
-
     }
 
     static Track load(File dir, RecorderAdapter callback){
         try{
             File groupMetaData = new File(dir, "group.json");
-            Utils.printFile("load", groupMetaData);
+            JSONObject metaObj = Utils.loadJSON(groupMetaData, "Track load: ");
+
             List<Audio> audios = new ArrayList<>();
-            int msBarPeriod = 0;
-            int msBarPeriodMod = 0;
-            try {
-                FileReader fileReader = new FileReader(groupMetaData);
-                JsonReader reader = new JsonReader(fileReader);
-                reader.beginObject();
-                while(reader.hasNext()){
-                    String curName = reader.nextName();
-                    switch (curName){
-                        case "audios":
-                            reader.beginArray();
 
-                            while(reader.hasNext()){
-                                Audio curAudio = Audio.loadAudio(dir, reader.nextString());
-                                if(curAudio != null)
-                                    audios.add(curAudio);
-                            }
-
-                            reader.endArray();
-                            break;
-                        case "msBarPeriod":
-                            msBarPeriod = reader.nextInt();
-                            break;
-                        case "msBarPeriodMod":
-                            msBarPeriodMod = reader.nextInt();
-                            break;
-                        default:
-                            reader.skipValue();
-                    }
-                }
-                reader.endObject();
-                reader.close();
-                fileReader.close();
-            } catch (IOException e){
-                Log.e("AudioGroup Load", "Loading failed during metadata parsing", e);
-                //Utils.deleteDirectory(dir);
+            int msBarPeriodMod = metaObj.getInt("msBarPeriodMod");
+            JSONArray JSONaudios = metaObj.getJSONArray("audios");
+            for(int i = 0; i < JSONaudios.length(); i++){
+                Audio curAudio = Audio.loadAudio(dir, JSONaudios.getString(i));
+                if(curAudio != null)
+                    audios.add(curAudio);
             }
 
-            return new Track(dir, audios, msBarPeriod, msBarPeriodMod, callback);
+            return new Track(dir, audios, msBarPeriodMod, callback);
         } catch (Exception e){
-            Log.w("AudioGroup Load", "Something occured while loading files. Deleting...", e);
-            //Utils.deleteDirectory(dir);
+            String deletion = "Something occured while loading files. Deleting " + dir.getName() + "...";
+            Log.e("AudioGroup Load", deletion, e);
+            Toast toast = Toast.makeText(callback.mContext, deletion, Toast.LENGTH_SHORT);
+            toast.show();
+            Utils.deleteDirectory(dir);
         }
         return null;
     }
@@ -249,6 +201,10 @@ public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener, Wave
 
     public int msMaxPeriod(){
         return getMsBarPeriod()*Rhythm.maxBars;
+    }
+
+    public int barTicks(){
+        return getMsBarPeriod()*Recorder.FREQ/1000;
     }
 
     public int maxTicks(){

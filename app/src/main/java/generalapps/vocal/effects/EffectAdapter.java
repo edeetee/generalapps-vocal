@@ -1,8 +1,9 @@
-package generalapps.vocal;
+package generalapps.vocal.effects;
 
 import android.content.Context;
 import android.support.v4.app.ShareCompat;
 import android.support.v4.view.PagerAdapter;
+import android.support.v4.view.ViewPager;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,6 +16,7 @@ import android.widget.ListAdapter;
 import java.util.Arrays;
 import java.util.List;
 
+import generalapps.vocal.R;
 import generalapps.vocal.effects.Effect;
 import generalapps.vocal.effects.EffectCategory;
 
@@ -24,14 +26,11 @@ import generalapps.vocal.effects.EffectCategory;
 public class EffectAdapter extends BaseAdapter {
     private Context mContext;
     private EffectCategory mCategory;
-    public static final int HALF_MAX_VALUE = Integer.MAX_VALUE/2;
-    public final int MIDDLE;
 
     public <T extends OnEffectSelectedListener> EffectAdapter(Context context, T listener, EffectCategory category) {
         mContext = context;
         mListener = listener;
         mCategory = category;
-        MIDDLE = HALF_MAX_VALUE - HALF_MAX_VALUE % category.size();
     }
 
     @Override
@@ -56,11 +55,13 @@ public class EffectAdapter extends BaseAdapter {
             image.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
-
-                    mListener.OnEffectSelected(view, effect);
+                    mListener.OnEffectSelected( effect);
                 }
             });
-            layout.addView(image);
+            int width = (int)mContext.getResources().getDimension(R.dimen.default_item_height);
+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(width, width);
+
+            layout.addView(image, params);
             layout.setBackgroundResource(R.drawable.round_rect_shape);
         }
 
@@ -73,7 +74,7 @@ public class EffectAdapter extends BaseAdapter {
     }
 
     public interface OnEffectSelectedListener{
-        void OnEffectSelected(View item, Effect effect);
+        void OnEffectSelected(Effect effect);
     }
     public OnEffectSelectedListener mListener;
 }
