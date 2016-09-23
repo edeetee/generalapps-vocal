@@ -16,9 +16,10 @@ public class ColorView extends View {
 
     public ColorView(Context context, AttributeSet attrs) {
         super(context, attrs);
+        int alpha = attrs.getAttributeIntValue("http://schemas.android.com/apk/res/android", "alpha", 100);
         colorPaint = new Paint();
         colorPaint.setColor(Color.BLACK);
-        colorPaint.setAlpha(100);
+        colorPaint.setAlpha(alpha);
     }
 
     @Override

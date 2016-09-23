@@ -49,6 +49,10 @@ public class EffectCategoryAdapter extends RecyclerView.Adapter<EffectCategoryAd
         return Integer.MAX_VALUE;
     }
 
+    public static int getMiddleForEffectCategory(EffectCategory category){
+        return MIDDLE + EffectCategory.list.indexOf(category);
+    }
+
     @Override
     public void onBindViewHolder(EffectCategoryHolder holder, int position) {
         holder.bind();

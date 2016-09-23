@@ -1,6 +1,7 @@
 package generalapps.vocal.templates;
 
 import android.content.Context;
+import android.support.annotation.NonNull;
 import android.support.v4.view.PagerAdapter;
 import android.view.View;
 import android.view.ViewGroup;
@@ -9,6 +10,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import generalapps.vocal.Audio;
 import generalapps.vocal.RecorderAdapter;
@@ -26,6 +29,7 @@ public class BarTemplatePagerAdapter extends PagerAdapter implements View.OnClic
     Audio mAudio;
     RecorderAdapter mAdapter;
     WaveView currentWave;
+    CopyOnWriteArrayList<WaveView> waves = new CopyOnWriteArrayList<>();
 
     public BarTemplatePagerAdapter(RecorderAdapter adapter, RecorderAdapter.AudioHolder holder) {
         mHolder = holder;
@@ -42,9 +46,28 @@ public class BarTemplatePagerAdapter extends PagerAdapter implements View.OnClic
         }
     }
 
-    public void postInvalidateCurrent(){
-        if(currentWave != null)
-            currentWave.postInvalidate();
+    public void updateWaves(){
+        for(WaveView wave : waves){
+            wave.updateWave();
+            wave.postInvalidate();
+        }
+    }
+
+    Callable<Float> mProgressCallback;
+    public void setProgressCallback(@NonNull Callable<Float> progressCallback){
+        mProgressCallback = progressCallback;
+        for(WaveView wave : waves){
+            wave.setCursorProgressCall(progressCallback);
+        }
+    }
+
+    public void stopProgressCallback(@NonNull Callable<Float> progressCallback){
+        if(mProgressCallback == progressCallback){
+            mProgressCallback = null;
+            for(WaveView wave : waves){
+                wave.setCursorProgressCall(null);
+            }
+        }
     }
 
     @Override
@@ -56,22 +79,19 @@ public class BarTemplatePagerAdapter extends PagerAdapter implements View.OnClic
     public Object instantiateItem(ViewGroup container, int position) {
         WaveView wave = new WaveView(container.getContext());
         wave.setAudio(mAudio);
-        wave.setAdapter(mAdapter);
         wave.setTemplate(BarTemplate.list.get(position));
         wave.setOnClickListener(mHolder);
         wave.setOnLongClickListener(mHolder);
+        wave.setCursorProgressCall(mProgressCallback);
         container.addView(wave);
+        waves.add(wave);
         return wave;
     }
 
     @Override
     public void destroyItem(ViewGroup container, int position, Object object) {
         container.removeView((View)object);
-    }
-
-    @Override
-    public int getItemPosition(Object object) {
-        return POSITION_NONE;
+        waves.remove(object);
     }
 
     @Override

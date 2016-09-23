@@ -1,0 +1,42 @@
+{
+  "project_info": {
+    "project_number": "741147283108",
+    "firebase_url": "https://vocal-d80ba.firebaseio.com",
+    "project_id": "vocal-d80ba",
+    "storage_bucket": "vocal-d80ba.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:741147283108:android:11b0952f6088d50f",
+        "android_client_info": {
+          "package_name": "generalapps.vocal"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "741147283108-vbq99u69d338hes7fgnjbde08s6it4tf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAfclNvYM4X4WAjR3tW8DZM5mq3roxA0jE"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "status": 1,
+          "other_platform_oauth_client": []
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

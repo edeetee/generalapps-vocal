@@ -90,7 +90,7 @@ public class PitchResyntheziser implements PitchDetectionHandler {
         }else{
             if(previousFrequencies.length!=0){
                 //median filter
-                //store and adjust pointer
+                //store and onAdjust pointer
                 previousFrequencies[previousFrequencyIndex] = frequency;
                 previousFrequencyIndex++;
                 previousFrequencyIndex %= previousFrequencies.length;

@@ -49,6 +49,7 @@ public class Utils {
             else
                 Log.i(tag, line);
         }
+        br.close();
     }
 
     static int getInnerViewPosition(View v){

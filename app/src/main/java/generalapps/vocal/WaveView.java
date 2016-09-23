@@ -14,6 +14,7 @@ import android.view.View;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
 
 import generalapps.vocal.templates.BarTemplate;
 
@@ -24,7 +25,6 @@ import generalapps.vocal.templates.BarTemplate;
 public class WaveView extends View {
 
     private Audio audio;
-    private RecorderAdapter adapter;
     private BarTemplate template;
 
     static int[] BARCOLORS = {Color.CYAN, Color.BLUE};//, Color.GREEN, Color.MAGENTA};
@@ -37,8 +37,13 @@ public class WaveView extends View {
     Paint[] barPaint;
     Paint disabledBarPaint;
     Paint barTrianglePaint;
+    Paint beatLinePaint;
 
     Path wavePath;
+    Path wavePathRead;
+
+    List<Path> triangles;
+    List<Rect> bars;
 
     public WaveView(Context context) {
         super(context);
@@ -70,6 +75,10 @@ public class WaveView extends View {
         disabledBarPaint = new Paint();
         disabledBarPaint.setColor(Color.LTGRAY);
         disabledBarPaint.setAlpha(100);
+
+        beatLinePaint = new Paint();
+        beatLinePaint.setColor(Color.BLACK);
+        beatLinePaint.setAlpha(50);
     }
 
     public void setAudio(Audio audio){
@@ -80,11 +89,13 @@ public class WaveView extends View {
 
     public void updateWave(){
         if(audio != null && audio.waveValues != null && !audio.waveValues.isEmpty() && 0 < audio.group.maxTicks()) {
+            //Log.d("WaveView", "updateWave() processing");
 
             int w = getWidth();
             int h = getHeight();
 
             wavePath = new Path();
+            int delayShift = (int)((double)w / Rhythm.maxBars * audio.msDelay / audio.group.getMsBarPeriod());
 
             for (int xi = 0; xi < Rhythm.maxBars / template.mRecordingLength; xi++) {
                 //skip if not enabled
@@ -97,23 +108,23 @@ public class WaveView extends View {
                 //double sided
                 while (true) {
                     int i = 0;
-                    wavePath.moveTo(xMod, h / 2);
+                    wavePath.moveTo(Math.max(xMod+delayShift, xMod), h / 2);
                     //wavePoint iteration
                     while (true) {
-                        int x = w * i * tickInterval / audio.group.maxTicks() + xMod;
-                        int xNext = w * (i + 1)  * tickInterval / audio.group.maxTicks() + xMod;
+                        int x = w * i * tickInterval / audio.group.maxTicks() + xMod + delayShift;
+                        int xNext = w * (i + 1)  * tickInterval / audio.group.maxTicks() + xMod + delayShift;
 
                         //exit point. Either end of wave values or reached end of bar
-                        if (audio.waveValues.size() == i+1 || (xMod + w * template.mRecordingLength / Rhythm.maxBars) <= x) {
+                        if (audio.waveValues.size() == i+1 || (xMod + w * template.mRecordingLength / Rhythm.maxBars) < x) {
                             wavePath.lineTo(x, h / 2);
                             break;
-                        } else {
+                        //don't draw if delay has it shifted before margin
+                        } else if(xMod < x) {
                             int y = (h / 2 + inv * Math.round(Math.min(1,audio.waveValues.get(i)*3) * h / 2));
                             int yNext = (h / 2 + inv * Math.round(Math.min(1,audio.waveValues.get(i+1)*3) * h / 2));
                             wavePath.quadTo(x, y, xNext, yNext);
-
-                            i++;
                         }
+                        i++;
                     }
                     //double sided waveform
                     if (inv < 0)
@@ -122,11 +133,8 @@ public class WaveView extends View {
                         break;
                 }
             }
+            wavePathRead = wavePath;
         }
-    }
-
-    public void setAdapter(RecorderAdapter adapter){
-        this.adapter = adapter;
     }
 
     public void setTemplate(BarTemplate template){
@@ -135,49 +143,79 @@ public class WaveView extends View {
 
     @Override
     public void invalidate() {
-        updateWave();
         super.invalidate();
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        int barWidth = w*template.mRecordingLength/Rhythm.maxBars;
+        bars = new ArrayList<>();
+        triangles = new ArrayList<>();
+
+        for(int xi = 0; xi < Rhythm.maxBars/template.mRecordingLength; xi++){
+            int xMod = xi*barWidth;//skip if not enabled
+            bars.add(new Rect(xMod, 0, barWidth+xMod, h));
+        }
+
+        int triangleSize = 30;
+        for(int xi = 1; xi < Rhythm.maxBars/template.mRecordingLength; xi++){
+            int xMod = xi*barWidth;
+            Path topTri = new Path();
+            topTri.moveTo(xMod-triangleSize/2, 0);
+            topTri.lineTo(xMod, triangleSize/2);
+            topTri.lineTo(xMod+triangleSize/2, 0);
+            triangles.add(topTri);
+            Path botTri = new Path(topTri);
+            Matrix flip = new Matrix();
+            flip.postRotate(180, xMod, h/2);
+            botTri.transform(flip);
+            triangles.add(botTri);
+        }
+
+        if(wavePathRead == null)
+            updateWave();
+    }
+
+    Callable<Float> getProgressCall;
+    public void setCursorProgressCall(Callable<Float> getProgress){
+        boolean isNew = getProgress != getProgressCall;
+        getProgressCall = getProgress;
+        if(isNew)
+            postInvalidate();
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         if(audio != null){
-
             int w = getWidth();
             int h = getHeight();
 
-            int barWidth = w*template.mRecordingLength/Rhythm.maxBars;
-
-            for(int xi = 0; xi < Rhythm.maxBars/template.mRecordingLength; xi++){
-                int xMod = xi*barWidth;//skip if not enabled
-                canvas.drawRect(new Rect(xMod, 0, barWidth+xMod, h), audio.enabled && template.mEnabledBars[xi] ? barPaint[xi%barPaint.length] : disabledBarPaint);
+            for(int i = 0; i < bars.size(); i++){
+                canvas.drawRect(bars.get(i), audio.enabled && template.mEnabledBars[i] ? barPaint[i%barPaint.length] : disabledBarPaint);
             }
 
-            if(wavePath == null)
-                updateWave();
-            if(wavePath != null)
-                canvas.drawPath(wavePath, audio.enabled ? wavePaint : disabledWavePaint);
-
-            int triangleSize = 30;
-            for(int xi = 1; xi < Rhythm.maxBars/template.mRecordingLength; xi++){
-                int xMod = xi*barWidth;
-                Path tri = new Path();
-                tri.moveTo(xMod-triangleSize/2, 0);
-                tri.lineTo(xMod, triangleSize/2);
-                tri.lineTo(xMod+triangleSize/2, 0);
-                canvas.drawPath(tri, barTrianglePaint);
-                Matrix flip = new Matrix();
-                flip.postRotate(180, xMod, h/2);
-                tri.transform(flip);
-                canvas.drawPath(tri, barTrianglePaint);
+            for(int i = 1; i < Rhythm.bpb*Rhythm.maxBars; i++){
+                int x = w*i/(Rhythm.bpb*Rhythm.maxBars);
+                canvas.drawLine(x, 0, x, h, beatLinePaint);
             }
 
-            if(adapter.playing){
-                float x = w*adapter.getProgress();
-                canvas.drawLine(x, h, x, 0, progressPaint);
-                //redraw
-                postInvalidate();
+            if(wavePathRead != null)
+                canvas.drawPath(wavePathRead, audio.enabled ? wavePaint : disabledWavePaint);
+
+            for(Path triangle : triangles){
+                canvas.drawPath(triangle, barTrianglePaint);
+            }
+
+            if(getProgressCall != null){
+                try{
+                    float x = w*getProgressCall.call();
+                    canvas.drawLine(x, h, x, 0, progressPaint);
+                    //redraw
+                    postInvalidateDelayed(1000/60);
+                } catch(Exception e){
+                    Log.e("WaveView", "progressCallCall", e);
+                }
             }
         }
     }

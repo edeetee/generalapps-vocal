@@ -5,34 +5,13 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:clipChildren="true">
+
     <android.support.v7.widget.RecyclerView
         android:minWidth="25dp"
         android:minHeight="25dp"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:id="@+id/mainRecycler"/>
-
-    <LinearLayout
-        android:id="@+id/adjustLayout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:weightSum="2"
-        android:orientation="horizontal"
-        android:layout_below="@+id/mainRecycler">
-        <ImageView
-            android:id="@+id/leftAdjust"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:src="@android:drawable/ic_media_play"
-            android:scaleX="-1"
-            android:layout_weight="1"/>
-        <ImageView
-            android:id="@+id/rightAdjust"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:src="@android:drawable/ic_media_play"
-            android:layout_weight="1"/>
-    </LinearLayout>
 
     <generalapps.vocal.RecorderCircle
         android:id="@+id/recordProgress"

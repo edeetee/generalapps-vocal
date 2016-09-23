@@ -23,13 +23,9 @@ public class SnappyLinearLayoutManager extends LinearLayoutManager implements IS
 
     private double deceleration;
 
-    public SnappyLinearLayoutManager(Context context) {
-        super(context);
-        calculateDeceleration(context);
-    }
-
-    public SnappyLinearLayoutManager(Context context, int orientation, boolean reverseLayout) {
+    public SnappyLinearLayoutManager(Context context, int orientation, boolean reverseLayout, OnPosChangedListener onPosChangedListener) {
         super(context, orientation, reverseLayout);
+        mOnPosChangedListener = onPosChangedListener;
         calculateDeceleration(context);
     }
 
@@ -42,7 +38,7 @@ public class SnappyLinearLayoutManager extends LinearLayoutManager implements IS
     }
 
     @Override
-    public int getPositionForVelocity(int velocityX, int velocityY) {
+    public int getPositionForVelocity(RecyclerView recyclerView, int velocityX, int velocityY) {
         if (getChildCount() == 0) {
             return 0;
         }
@@ -50,27 +46,36 @@ public class SnappyLinearLayoutManager extends LinearLayoutManager implements IS
             return calcPosForVelocity(velocityX, getChildAt(0).getLeft(), getChildAt(0).getWidth(),
                     getPosition(getChildAt(0)));
         } else {
-            return calcPosForVelocity(velocityY, getChildAt(0).getTop(), getChildAt(0).getHeight(),
+            return calcPosForVelocity(velocityY, getChildAt(0).getTop() - recyclerView.getTop(), getChildAt(0).getHeight(),
                     getPosition(getChildAt(0)));
         }
     }
 
     private int calcPosForVelocity(int velocity, int scrollPos, int childSize, int currPos) {
-        final double dist = getSplineFlingDistance(velocity/100);
+        final double dist = getSplineFlingDistance(velocity/5) * ((velocity < 0) ? -1 : 1);
 
         //final double tempScroll = scrollPos + childSize + (velocity > 0 ? dist : -dist);
-        double tempScroll = scrollPos + childSize/2;
 
         //return (int) Math.round(currPos + (((double)scrollPos + childSize/2) / childSize));
 
         //return (int) (currPos + tempScroll/childSize + 1);
-        if (velocity < 0) {
-            // Not sure if I need to lower bound this here.
-            return (int) Math.round(currPos + tempScroll / childSize);
-        } else {
-            return (int) Math.round(currPos + tempScroll / childSize + 1);
-        }
+        int unSafePos = (int)(currPos + (dist-scrollPos) / childSize + 0.5);
+        int newPos = Math.max(0, unSafePos); getItemCount();
+        if(mOnPosChangedListener != null)
+            mOnPosChangedListener.onPosChanged(newPos);
+        return newPos;
+//        if (dist < 0) {
+//            // Not sure if I need to lower bound this here.
+//            return (int)(currPos + scrollPos+dist / childSize);
+//        } else {
+//            return currPos + scrollPos / childSize + 1;
+//        }
     }
+
+    public interface OnPosChangedListener{
+        void onPosChanged(int pos);
+    }
+    OnPosChangedListener mOnPosChangedListener;
 
     @Override
     public void smoothScrollToPosition(RecyclerView recyclerView, RecyclerView.State state, int position) {
@@ -117,7 +122,7 @@ public class SnappyLinearLayoutManager extends LinearLayoutManager implements IS
      * hacking than I was willing to put into it.
      */
     @Override
-    public int getFixScrollPos() {
+    public int getFixScrollPos(RecyclerView recyclerView) {
         if (this.getChildCount() == 0) {
             return 0;
         }
@@ -126,11 +131,11 @@ public class SnappyLinearLayoutManager extends LinearLayoutManager implements IS
         final int childPos = getPosition(child);
 
         if (getOrientation() == HORIZONTAL
-                && Math.abs(child.getLeft()) > child.getMeasuredWidth() / 2) {
+                && Math.abs(child.getLeft() - recyclerView.getLeft()) > child.getMeasuredWidth() / 2) {
             // Scrolled first view more than halfway offscreen
             return childPos + 1;
         } else if (getOrientation() == VERTICAL
-                && Math.abs(child.getTop()) > child.getMeasuredWidth() / 2) {
+                && Math.abs(child.getTop() - recyclerView.getTop()) > child.getMeasuredWidth() / 2) {
             // Scrolled first view more than halfway offscreen
             return childPos + 1;
         }

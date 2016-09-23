@@ -7,12 +7,18 @@ import android.media.MediaRecorder;
 import android.os.Handler;
 import android.util.Log;
 
+import com.google.firebase.storage.StorageReference;
+
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.PipedInputStream;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.concurrent.Callable;
 
 import generalapps.vocal.audioGen.AudioGenerator;
 
@@ -78,17 +84,13 @@ public class Recorder {
 
     public void prepareRecord(RecorderAdapter adapter){
         group = adapter.group;
-        first = group == null;
+        first = group.size() == 0;
 
         timeString = new SimpleDateFormat("HH_mm_ss").format(Calendar.getInstance().getTime());
 
         audio = new Audio();
         audio.setName(timeString);
-        if(first){
-            group = new Track(audio, adapter);
-        } else {
-            adapter.group.add(audio);
-        }
+        adapter.group.add(audio);
 
         audioFile = new File(group.dir, timeString + ".wav");
 
@@ -211,10 +213,21 @@ public class Recorder {
         if(state == State.PREPARED){
             recordingThread.start();
             recorder.startRecording();
+            if(1 < group.size())
+            for(Audio audio : group){
+                audio.holder.barTemplateAdapter.setProgressCallback(recordProgressCallback);
+            }
             recordingStart = System.currentTimeMillis();
         } else
             Log.w("Recording State", "State is " + state.name() + ". It should be " + State.PREPARED.name());
     }
+
+    Callable<Float> recordProgressCallback = new Callable<Float>() {
+        @Override
+        public Float call() throws Exception {
+            return (float)Rhythm.ticksToMs(ticks)/(group.getMsBarPeriod()*Rhythm.maxBars);
+        }
+    };
 
     private void writeAudioDataToFile() {
         setState(State.RECORDING);
@@ -263,7 +276,8 @@ public class Recorder {
             }
             ticks += buffer/2;
             audio.setTicks(ticks);
-            audio.holder.barTemplateAdapter.postInvalidateCurrent();
+            if(audio.holder != null)
+                audio.holder.barTemplateAdapter.updateWaves();
         }
         try {
             os.close();
@@ -288,10 +302,8 @@ public class Recorder {
     }
 
     public void stop(){
-        //if the recording did not start, remove the empty audio view
-        if(state == State.RECORDING && isLongEnough()){
-
-        } else{
+        //if the recording did not start, remove the empty audio view. This determines if the audio data will be saved later
+        if(state != State.RECORDING || !isLongEnough()){
             group.remove(audio);
         }
 
@@ -310,9 +322,24 @@ public class Recorder {
     }
 
     private void postStop(){
-        if(isLongEnough()){
+        //if the audio is still in the group
+        if(group.contains(audio)){
             audio.writeMetaData();
-            audio.writeFile(audioFile);
+            audio.readFile();
+            if(first)
+                HowTo.Basic("Adjusting first recording",
+                        "Click the left and right buttons to change the length of the track. Whatever length you choose will be the bar length for all consecutive tracks.",
+                        MainActivity.context);
+            else if(group.size() == 2){
+                HowTo.Basic("Adjusting additional recordings",
+                        "Click the left and right buttons to make your new recording line up with your other recordings",
+                        MainActivity.context);
+                HowTo.StopHelp(MainActivity.context);
+            }
+        }
+
+        for(Audio audio : group){
+            audio.holder.barTemplateAdapter.stopProgressCallback(recordProgressCallback);
         }
 
         recorder.stop();

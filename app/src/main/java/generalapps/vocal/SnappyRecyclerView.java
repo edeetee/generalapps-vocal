@@ -22,13 +22,28 @@ public final class SnappyRecyclerView extends RecyclerView {
         super(context, attrs, defStyle);
     }
 
+    public interface OnScrollStateChangedListener{
+        void OnScrollStateChanged(int state);
+    }
+    OnScrollStateChangedListener mScrollStateListener;
+
+    public void setOnScrollStateChangedListener(OnScrollStateChangedListener listener){
+        mScrollStateListener = listener;
+    }
+
+    @Override
+    public void onScrollStateChanged(int state) {
+        if(mScrollStateListener != null)
+            mScrollStateListener.OnScrollStateChanged(state);
+    }
+
     @Override
     public boolean fling(int velocityX, int velocityY) {
         final LayoutManager lm = getLayoutManager();
 
         if (lm instanceof ISnappyLayoutManager) {
             super.smoothScrollToPosition(((ISnappyLayoutManager) getLayoutManager())
-                    .getPositionForVelocity(velocityX, velocityY));
+                    .getPositionForVelocity(this, velocityX, velocityY));
             return true;
         }
         return super.fling(velocityX, velocityY);
@@ -54,7 +69,8 @@ public final class SnappyRecyclerView extends RecyclerView {
             // velocity after the user's gesture was below the threshold, and
             // no fling was performed, so the view may be in an unaligned state
             // and will not be flung to a proper state.
-            smoothScrollToPosition(((ISnappyLayoutManager) lm).getFixScrollPos());
+            //smoothScrollToPosition(((ISnappyLayoutManager) lm).getFixScrollPos(this));
+            smoothScrollToPosition(((ISnappyLayoutManager)lm).getPositionForVelocity(this, 0, 0));
         }
 
         return ret;

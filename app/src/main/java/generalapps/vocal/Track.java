@@ -1,36 +1,75 @@
 package generalapps.vocal;
 
-import android.support.annotation.UiThread;
-import android.support.v7.widget.RecyclerView;
-import android.test.UiThreadTest;
-import android.util.JsonReader;
-import android.util.JsonWriter;
+import android.content.SharedPreferences;
 import android.util.Log;
-import android.widget.Toast;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.Exclude;
+import com.google.firebase.database.GenericTypeIndicator;
+import com.google.firebase.database.IgnoreExtraProperties;
+import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.storage.StorageReference;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Created by edeetee on 11/05/2016.
  */
 public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener {
     private List<Audio> audios;
-    private File metaData;
+    private Map<String, EditorItem> editors;
     Audio first;
     File dir;
-    private int msBarPeriodMod = 0;
+    StorageReference cloudDir;
+    DatabaseReference audioMetaRef;
+    int msBarPeriodMod = 0;
+    String key;
 
-    OnTrackChangeListener mCallback;
+    private OnTrackChangeListener mCallback = new OnTrackChangeListener() {
+        @Override
+        public void OnLoad(Track track) {
+            for (OnTrackChangeListener callback : mCallbacks) {
+                callback.OnLoad(track);
+            }
+        }
+
+        @Override
+        public void OnAdd(int pos) {
+            for (OnTrackChangeListener callback : mCallbacks) {
+                callback.OnAdd(pos);
+            }
+        }
+
+        @Override
+        public void OnRemoved(int pos) {
+            for (OnTrackChangeListener callback : mCallbacks) {
+                callback.OnRemoved(pos);
+            }
+        }
+
+        @Override
+        public void OnChanged(int pos) {
+            for (OnTrackChangeListener callback : mCallbacks) {
+                callback.OnChanged(pos);
+            }
+        }
+
+        @Override
+        public void OnDelete() {
+            for (OnTrackChangeListener callback : mCallbacks) {
+                callback.OnDelete();
+            }
+        }
+    };
+    private List<OnTrackChangeListener> mCallbacks = new ArrayList<>();
 
     @Override
     public void OnChange(Audio audio) {
@@ -38,47 +77,80 @@ public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener {
             mCallback.OnChanged(audios.indexOf(audio));
     }
 
-    public void invalidateWaves(){
-        for(Audio audio : audios){
-            if(audio.holder != null)
-                audio.holder.barTemplateAdapter.postInvalidateCurrent();
-        }
-    }
+    private ListListener<Audio> mAudiosListener;
+    private ListListener<String> mEditorsListener;
 
     public interface OnTrackChangeListener{
+        void OnLoad(Track track);
         void OnAdd(int pos);
         void OnRemoved(int pos);
         void OnChanged(int pos);
         void OnDelete();
     }
 
-    public Track(Audio first, RecorderAdapter callback){
+    //on first creation
+    public Track(OnTrackChangeListener callback){
+        audioMetaRef = MainActivity.database.getReference("meta").child("tracks").push();
         audios = new ArrayList<>();
-
+        editors = new HashMap<>();
         //manually add just for first value
-        first.setTrack(this);
-        this.first = first;
-        audios.add(first);
-        mCallback = callback;
-        callback.group = this;
+        //function calls after field sets
+        key = audioMetaRef.getKey();
+        cloudDir = MainActivity.storageRef.child("audios").child(key);
+        addEditor(MainActivity.user);
+        addOnTrackChangeListener(callback);
+        audioMetaRef.child("editors").addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                GenericTypeIndicator<Map<String, EditorItem>> t = new GenericTypeIndicator<Map<String, EditorItem>>() {};
+                editors = dataSnapshot.getValue(t);
+            }
 
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+
+            }
+        });
         generateDir();
-        mCallback.OnAdd(0);
-        updateMetadata();
+        mCallback.OnLoad(this);
     }
 
-    //only for use with load() static func
-    private Track(File dir, List<Audio> audios, int msBarPeriodMod, RecorderAdapter callback){
+    //on recreation
+    public Track(MetaData meta, OnTrackChangeListener callback){
+        this.audios = new ArrayList<>();
+        for(String audioName : meta.audios){
+            audios.add(new Audio(audioName));
+        }
+        this.first = 0 < audios.size() ? audios.get(0) : null;
+        this.key = meta.key;
+        editors = meta.editors;
+        this.msBarPeriodMod = meta.msBarPeriodMod;
+        cloudDir = MainActivity.storageRef.child("audios").child(key);
+        audioMetaRef = MainActivity.database.getReference("meta").child("tracks").child(key);
+        //function calls after field sets
+        addOnTrackChangeListener(callback);
+        generateDir();
+        //set tracks last
         for(Audio audio : audios){
             audio.setTrack(this);
         }
-        this.first = audios.get(0);
-        this.audios = audios;
-        this.msBarPeriodMod = msBarPeriodMod;
-        this.dir = dir;
+        audioMetaRef.child("editors").addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                GenericTypeIndicator<Map<String, EditorItem>> t = new GenericTypeIndicator<Map<String, EditorItem>>() {};
+                editors = dataSnapshot.getValue(t);
+            }
 
-        mCallback = callback;
-        callback.group = this;
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+
+            }
+        });
+        callback.OnLoad(this);
+    }
+
+    public void addOnTrackChangeListener(OnTrackChangeListener listener){
+        mCallbacks.add(listener);
     }
 
     @Override
@@ -101,6 +173,10 @@ public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener {
     }
 
     public void add(Audio audio){
+        if(editors.size() <= size())
+            addEditor(MainActivity.user);
+        if(audios.size() == 0)
+            first = audio;
         audio.setTrack(this);
         audios.add(audio);
         mCallback.OnAdd(audios.size()-1);
@@ -122,8 +198,58 @@ public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener {
         }
     }
 
+    void addEditor(User artist){
+        EditorItem item = new EditorItem();
+        item.position = editors.size();
+        item.uid = artist.uid;
+        editors.put(audioMetaRef.child("tracks").push().getKey(), item);
+        updateMetadata();
+    }
+
+    boolean swapEditorPos(final int fromPos, final int toPos){
+        //only move around editors if both positions are under audios size
+        if(toPos < audios.size() || fromPos < audios.size())
+            return false;
+
+        for (EditorItem editor : editors.values())
+            if(editor.position == fromPos)
+                editor.position = toPos;
+            else if(editor.position == toPos)
+                editor.position = fromPos;
+        updateMetadata();
+        return true;
+    }
+
+    EditorItem getEditor(int pos){
+        for(Map.Entry<String, EditorItem> editor : editors.entrySet()){
+            if(editor.getValue().position == pos)
+                return editor.getValue();
+        }
+        return null;
+    }
+
+    int numEditors(){
+        return editors.size();
+    }
+
+    void removeEditor(int pos){
+        String removalKey = null;
+        for(Map.Entry<String, EditorItem> editor : editors.entrySet()){
+            if(editor.getValue().position == pos){
+                removalKey = editor.getKey();
+            } else if(pos < editor.getValue().position)
+                editor.getValue().position--;
+        }
+        editors.remove(removalKey);
+        updateMetadata();
+    }
+
     public void remove(Audio audio){
         remove(audios.indexOf(audio));
+    }
+
+    public boolean contains(Audio audio){
+        return audios.contains(audio);
     }
 
     public void delete(){
@@ -134,8 +260,8 @@ public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener {
         }
         audios.clear();
         first = null;
-        if(metaData != null)
-            metaData.delete();
+        audioMetaRef.removeValue();
+        cloudDir.delete();
         if(dir != null)
             Utils.deleteDirectory(dir);
     }
@@ -145,54 +271,21 @@ public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener {
     }
 
     private void generateDir(){
-        dir = new File(MainActivity.context.getFilesDir() + "/audios/" + audios.get(0).name);
-        dir.mkdir();
+        dir = new File(MainActivity.context.getFilesDir() + "/audios/" + key);
+        if(!dir.isDirectory())
+            dir.mkdir();
+        cloudDir = MainActivity.storageRef.child("audios").child(key);
     }
 
     private void updateMetadata(){
+        Log.i("Track", "updateMetadata");
         try{
-            metaData = new File(dir, "group.json");
-            JSONObject metaObj = new JSONObject();
-            JSONArray JSONaudios = new JSONArray();
-            for(Audio audio : audios){
-                JSONaudios.put(audio.name);
-            }
-            metaObj.put("audios", JSONaudios);
-            metaObj.put("msBarPeriodMod", msBarPeriodMod);
-
-            String output = metaObj.toString();
-
-            new FileWriter(metaData).write(output);
-            Utils.printFile("write", metaData);
+            audioMetaRef.keepSynced(true);
+            MetaData meta = new MetaData(this);
+            audioMetaRef.setValue(meta);
         } catch(Exception e){
             Log.e("Track", "updateMetadata", e);
         }
-    }
-
-    static Track load(File dir, RecorderAdapter callback){
-        try{
-            File groupMetaData = new File(dir, "group.json");
-            JSONObject metaObj = Utils.loadJSON(groupMetaData, "Track load: ");
-
-            List<Audio> audios = new ArrayList<>();
-
-            int msBarPeriodMod = metaObj.getInt("msBarPeriodMod");
-            JSONArray JSONaudios = metaObj.getJSONArray("audios");
-            for(int i = 0; i < JSONaudios.length(); i++){
-                Audio curAudio = Audio.loadAudio(dir, JSONaudios.getString(i));
-                if(curAudio != null)
-                    audios.add(curAudio);
-            }
-
-            return new Track(dir, audios, msBarPeriodMod, callback);
-        } catch (Exception e){
-            String deletion = "Something occured while loading files. Deleting " + dir.getName() + "...";
-            Log.e("AudioGroup Load", deletion, e);
-            Toast toast = Toast.makeText(callback.mContext, deletion, Toast.LENGTH_SHORT);
-            toast.show();
-            Utils.deleteDirectory(dir);
-        }
-        return null;
     }
 
     public int msBeatPeriod(){
@@ -209,5 +302,39 @@ public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener {
 
     public int maxTicks(){
         return msMaxPeriod()*Recorder.FREQ/1000;
+    }
+
+    @IgnoreExtraProperties
+    public static class MetaData implements Serializable{
+        public List<String> audios = new ArrayList<>();
+        public Map<String, EditorItem> editors = new HashMap<>();
+        public Integer msBarPeriodMod;
+        public String key;
+
+        public MetaData(){}
+        public MetaData(Track track){
+            msBarPeriodMod = track.msBarPeriodMod;
+            audios = new ArrayList<>();
+            for(Audio audio : track.audios){
+                audios.add(audio.name);
+            }
+            key = track.key;
+            editors = track.editors;
+        }
+
+        @Exclude
+        public DatabaseReference getRef(){
+            return MainActivity.database.getReference("meta").child("tracks").child(key);
+        }
+
+        @Exclude
+        public String getFirst(){
+            return 0 < audios.size() ? audios.get(0) : "no audios!!";
+        }
+    }
+
+    public static class EditorItem{
+        public int position;
+        public String uid;
     }
 }
