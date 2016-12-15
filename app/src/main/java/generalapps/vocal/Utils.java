@@ -1,11 +1,18 @@
 package generalapps.vocal;
 
 import android.content.Context;
+import android.support.annotation.Nullable;
+import android.support.v4.graphics.ColorUtils;
 import android.util.Log;
 import android.util.LogPrinter;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.widget.LinearLayout;
 import android.widget.ListView;
+
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.storage.StorageReference;
 
 import org.json.JSONObject;
 
@@ -90,5 +97,48 @@ public class Utils {
 
     public static JSONObject loadJSON(File file) {
         return loadJSON(file, null);
+    }
+
+    public static void deleteTrack(Track.MetaData trackMeta){
+        MainActivity.database.getReference("meta").child("tracks").child(trackMeta.key).removeValue();
+        DatabaseReference audiosRef = MainActivity.database.getReference("meta").child("audios");
+        StorageReference cloudAudio = MainActivity.storageRef.child("audios");
+        for (String audio : trackMeta.audios.keySet()) {
+            audiosRef.child(audio).removeValue();
+            cloudAudio.child(audio + ".wav").delete();
+        }
+    }
+
+    /**
+     *
+     * @param max max number exclusive
+     * @return random number 0 - max(exclusive)
+     */
+    static int randomInt(int max){
+        return (int)(Math.random()*max);
+    }
+
+    /**
+     *
+     * @param min min number incluside
+     * @param max max number exclusive
+     * @return random number min(inclusive) - max(exclusive)
+     */
+    static int randomInt(int min, int max){
+        return randomInt(max-min)+min;
+    }
+
+    static <E extends Enum<E>> boolean isEnum(Class<E> enumClass, String value){
+        for (Enum<E> enumConst : enumClass.getEnumConstants()) {
+            //if special things required to finish
+            if(enumConst.name().equals(value))
+                return true;
+        }
+        return false;
+    }
+
+    static LinearLayout.LayoutParams setWeight(LinearLayout.LayoutParams input, int weight){
+        input.weight = weight;
+        return input;
     }
 }

@@ -1,29 +1,175 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical" android:layout_width="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:weightSum="2">
-    <android.support.v7.widget.RecyclerView
-        android:id="@+id/artistsRecycler"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"/>
+    android:weightSum="5"
+    android:background="@color/background">
     <LinearLayout
-        android:orientation="vertical"
+        android:id="@+id/optionsLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:weightSum="3"
+        android:padding="5dp">
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"/>
+        <info.hoang8f.android.segmented.SegmentedGroup
+            android:id="@+id/freeMode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:sc_border_width="2dp"
+            app:sc_corner_radius="5dp"
+            android:orientation="horizontal"
+            app:sc_checked_text_color="@color/accent"
+            app:sc_tint_color="@color/primary"
+            android:checkedButton="@+id/freeModeDisabled"
+            android:layout_gravity="center">
+            <RadioButton
+                android:id="@+id/freeModeDisabled"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Turns"
+                style="@style/RadioButton"/>
+            <RadioButton
+                android:id="@+id/freeModeEnabled"
+                android:text="Free Mode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                style="@style/RadioButton"/>
+        </info.hoang8f.android.segmented.SegmentedGroup>
+        <Space
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"/>
+        <info.hoang8f.android.segmented.SegmentedGroup
+            android:id="@+id/shuffle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:sc_border_width="2dp"
+            app:sc_corner_radius="5dp"
+            android:orientation="horizontal"
+            app:sc_checked_text_color="@color/accent"
+            app:sc_tint_color="@color/primary"
+            android:checkedButton="@+id/shuffleDisabled"
+            android:layout_gravity="center">
+            <RadioButton
+                android:id="@+id/shuffleDisabled"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Ordered"
+                style="@style/RadioButton"/>
+            <RadioButton
+                android:id="@+id/shuffleEnabled"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Shuffled"
+                style="@style/RadioButton"/>
+        </info.hoang8f.android.segmented.SegmentedGroup>
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"/>
+        <!--<TextView-->
+            <!--android:layout_width="wrap_content"-->
+            <!--android:layout_height="wrap_content"-->
+            <!--android:layout_gravity="center_vertical"-->
+            <!--android:layout_marginRight="10dp"-->
+            <!--android:layout_marginEnd="10dp"-->
+            <!--android:textSize="30sp"-->
+            <!--android:text="Free Mode"/>-->
+        <!--<Switch-->
+            <!--android:id="@+id/freeModeSwitch"-->
+            <!--android:layout_gravity="center"-->
+            <!--android:layout_width="wrap_content"-->
+            <!--android:layout_height="wrap_content"/>-->
+        <!--<Space-->
+            <!--android:layout_width="0dp"-->
+            <!--android:layout_height="match_parent"-->
+            <!--android:layout_weight="1"/>-->
+        <!--<Button-->
+            <!--android:id="@+id/shuffle"-->
+            <!--android:layout_gravity="center"-->
+            <!--android:layout_marginEnd="10dp"-->
+            <!--android:layout_marginRight="10dp"-->
+            <!--android:layout_width="40dp"-->
+            <!--android:layout_height="40dp"-->
+            <!--android:background="@drawable/shuffle_disabled"/>-->
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/artistsLayout"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_weight="3"
+        android:orientation="vertical"
+        android:layout_margin="3dp"
+        android:elevation="2dp"
+        android:background="@color/background_lighter"
         android:weightSum="1">
-        <EditText
-            android:inputType="textPersonName"
-            android:hint="Search"
-            android:id="@+id/search"
-            android:layout_width="match_parent"
-            android:layout_height="50dp" />
+        <TextView
+            android:layout_gravity="left"
+            android:id="@+id/artistsHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="20sp"
+            android:padding="1dp"
+            android:paddingBottom="0dp"
+            android:text="Order Artist"/>
         <android.support.v7.widget.RecyclerView
-            android:id="@+id/searchRecycler"
+            android:id="@+id/artistsRecycler"
+            android:padding="5dp"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"/>
-
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            xmlns:tools="http://schemas.android.com/tools"
+            tools:listitem="@layout/artist_item"/>
     </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/specialEditorsLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:weightSum="3">
+        <Button
+            android:id="@+id/random"
+            android:layout_gravity="center_vertical"
+            android:layout_weight="1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:textColor="@color/primary_light"
+
+            android:backgroundTint="@color/primary_dark"
+            android:text="Random"/>
+        <Button
+            android:id="@+id/previousChoice"
+            android:layout_gravity="center_vertical"
+            android:layout_weight="1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:textColor="@color/primary_light"
+            android:backgroundTint="@color/primary_dark"
+            android:text="Previous Chooses"/>
+        <Button
+            android:id="@+id/join"
+            android:layout_gravity="center_vertical"
+            android:layout_weight="1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:textColor="@color/primary_light"
+            android:backgroundTint="@color/primary_dark"
+            android:text="Join &amp; Share"/>
+    </LinearLayout>
+
+    <generalapps.vocal.ArtistSearcher
+        android:id="@+id/artist_searcher"
+        android:layout_width="match_parent"
+        android:layout_margin="3dp"
+        android:padding="5dp"
+        android:elevation="2dp"
+        android:background="@color/background_lighter"
+        android:layout_height="0dp"
+        android:layout_weight="2"/>
 </LinearLayout>

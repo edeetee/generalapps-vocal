@@ -1,14 +1,17 @@
 package generalapps.vocal;
 
+import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.content.Context;
 import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.support.v7.widget.helper.ItemTouchHelper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import com.github.clans.fab.FloatingActionButton;
@@ -16,14 +19,11 @@ import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseReference;
 
 import java.io.File;
-import java.io.FileFilter;
-import java.util.Arrays;
-import java.util.List;
 
 /**
  * Created by edeetee on 1/06/2016.
  */
-public class TracksFragment extends Fragment {
+public class TracksListFragment extends Fragment {
     interface TracksFragmentListener{
         void OnTrackSelected(Track.MetaData meta);
         void OnNewTrack();
@@ -50,11 +50,21 @@ public class TracksFragment extends Fragment {
     }
 
     @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setRetainInstance(true);
+    }
+
+    @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        setHasOptionsMenu(true);
+
         View fragView = inflater.inflate(R.layout.tracks_fragment, container, false);
         recycler = (RecyclerView)fragView.findViewById(R.id.tracksRecycler);
 
-        DatabaseReference metaRef = MainActivity.database.getReference("meta").child("tracks");
+        recycler.addItemDecoration(new SimpleDividerDecoration(getContext(), 0.03f));
+
+        final DatabaseReference metaRef = MainActivity.database.getReference("meta").child("tracks");
         adapter = new FilteredFirebaseRecyclerAdapter<TrackHolder>(TrackHolder.class, R.layout.track_item, metaRef) {
             @Override
             public void populateViewHolder(TrackHolder holder, DataSnapshot item) {
@@ -64,13 +74,23 @@ public class TracksFragment extends Fragment {
         adapter.setFilter(new FilteredFirebaseRecyclerAdapter.Filter() {
             @Override
             public boolean shouldAdd(DataSnapshot data) {
-                for (DataSnapshot editor : data.child("editors").getChildren()) {
-                    if(editor.getValue(Track.EditorItem.class).uid.equals(MainActivity.user.uid))
-                        return true;
-                }
-                return false;
+                Track.MetaData trackMeta = data.getValue(Track.MetaData.class);
+                return trackMeta.canOpen(MainActivity.user.uid);
             }
         });
+
+        ItemTouchHelper helper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT){
+            @Override
+            public boolean onMove(RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder, RecyclerView.ViewHolder target) {
+                return false;
+            }
+
+            @Override
+            public void onSwiped(RecyclerView.ViewHolder viewHolder, int direction) {
+                Utils.deleteTrack(adapter.getItem(viewHolder.getAdapterPosition()).getValue(Track.MetaData.class));
+            }
+        });
+        helper.attachToRecyclerView(recycler);
 
         recycler.setAdapter(adapter);
         recycler.setLayoutManager(new LinearLayoutManager(mContext, LinearLayoutManager.VERTICAL, false));
@@ -83,37 +103,39 @@ public class TracksFragment extends Fragment {
             }
         });
 
+        ((MainActivity)getActivity()).howToOverlayLayout.tryHelpingView(HowToOverlayLayout.HowToInfo.NEW_TRACK, createNew);
+
         return fragView;
-    }
-
-    private List<File> getTrackDirs(){
-        if (!audioDir.exists())
-            audioDir.mkdir();
-
-        File[] audioDirs = audioDir.listFiles(new FileFilter() {
-            @Override
-            public boolean accept(File file) {
-                if(file.isDirectory())
-                    return true;
-
-                file.delete();
-                return false;
-            }
-        });
-
-        return Arrays.asList(audioDirs);
     }
 
     public static class TrackHolder extends RecyclerView.ViewHolder{
         TextView name;
+        ProgressBar progress;
 
         public TrackHolder(View itemView){
             super(itemView);
             name = (TextView)itemView.findViewById(R.id.name);
+            progress = (ProgressBar)itemView.findViewById(R.id.progressBar);
         }
 
-        public void bind(final Track.MetaData trackMeta, final TracksFragmentListener callback){
-            name.setText(trackMeta.getFirst());
+        void bind(final Track.MetaData trackMeta, final TracksFragmentListener callback){
+            if(!trackMeta.isSetup)
+                name.setText(trackMeta.title + " : Setup");
+            else{
+                trackMeta.getCurrentEditor(new Track.MetaData.EditorCallback() {
+                    @Override
+                    public void editorNameLoaded(User editor) {
+                        name.setText(trackMeta.title + " : " + (!editor.uid.equals(MainActivity.user.uid) ? editor.firstName() + "'s turn" : "Your turn"));
+                    }
+                });
+            }
+                ;
+            if(!trackMeta.freeMode && trackMeta.isSetup){
+                progress.setVisibility(View.VISIBLE);
+                progress.setMax(trackMeta.editors.size());
+                progress.setProgress(trackMeta.currentEditIndex);
+            } else
+                progress.setVisibility(View.GONE);
 
             itemView.setOnClickListener(new View.OnClickListener() {
                 @Override

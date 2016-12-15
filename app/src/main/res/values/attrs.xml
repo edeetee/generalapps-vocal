@@ -28,5 +28,11 @@
 
         <attr name="donut_circle_starting_degree" format="integer" />
     </declare-styleable>
+
+    <!--Segmented group-->
+    <attr name="sc_corner_radius" format="dimension" />
+    <attr name="sc_border_width" format="dimension" />
+    <attr name="sc_tint_color" format="color" />
+    <attr name="sc_checked_text_color" format="color" />
 </resources>
 

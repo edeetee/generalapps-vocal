@@ -24,7 +24,6 @@ public class RecorderCircle extends DonutProgress {
     static float peak = .02f;
     static float peakMod = .1f;
 
-
     public RecorderCircle(Context context) {
         this(context, null);
     }
@@ -40,6 +39,7 @@ public class RecorderCircle extends DonutProgress {
         setText("");
 
         setMax(100);
+        setStartingDegree(-90);
     }
 
     @Override

@@ -2,6 +2,10 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
     <CheckBoxPreference android:key="pref_howto"
         android:title="HowTo"
-        android:summary="Should show HowTo messages"
+        android:summary="Show the tutorial (Cycle off/on to reset)"
         android:defaultValue="true"/>
+    <CheckBoxPreference android:key="pref_stereo"
+        android:title="Stereo microphone"
+        android:summary="Should microphone be in mono(disabled) or stereo(enabled)"
+        android:defaultValue="false"/>
 </PreferenceScreen>

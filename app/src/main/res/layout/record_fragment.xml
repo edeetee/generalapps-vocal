@@ -11,7 +11,9 @@
         android:minHeight="25dp"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:id="@+id/mainRecycler"/>
+        android:id="@+id/mainRecycler"
+        xmlns:tools="http://schemas.android.com/tools"
+        tools:listitem="@layout/audio_item"/>
 
     <generalapps.vocal.RecorderCircle
         android:id="@+id/recordProgress"

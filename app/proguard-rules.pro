@@ -15,3 +15,7 @@
 #-keepclassmembers class fqcn.of.javascript.interface.for.webview {
 #   public *;
 #}
+
+-dontwarn com.loopj.android.http.**
+-dontwarn okio.**
+-keepattributes InnerClasses

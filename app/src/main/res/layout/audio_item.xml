@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
     <android.support.v7.widget.CardView
@@ -11,33 +11,38 @@
         android:layout_height="wrap_content"
         card_view:contentPadding="5dp"
         card_view:cardCornerRadius="2dp"
+        card_view:cardBackgroundColor="@color/background_lighter"
         card_view:cardElevation="3dp">
-        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
             android:layout_width="match_parent"
             android:layout_height="@dimen/default_item_height"
             android:orientation="horizontal"
             android:id="@+id/lowestParent">
 
-            <generalapps.vocal.SnappyRecyclerView
-                android:id="@+id/groupTemplate"
+            <android.support.v7.widget.RecyclerView
+                android:id="@+id/effectCategory"
+                android:layout_alignParentRight="true"
                 android:layout_width="@dimen/default_item_height"
                 android:layout_height="@dimen/default_item_height"/>
+
+            <View
+                android:clickable="true"
+                android:id="@+id/effectSpace"
+                android:layout_alignParentRight="true"
+                android:layout_width="@dimen/default_item_height"
+                android:layout_height="@dimen/default_item_height" />
 
             <android.support.v4.view.ViewPager
                 android:id="@+id/barTemplate"
                 android:layout_width="0dp"
-                android:layout_weight="1"
+                android:layout_alignParentLeft="true"
+                android:layout_toLeftOf="@id/effectSpace"
                 android:layout_height="match_parent"/>
-
-            <generalapps.vocal.SnappyRecyclerView
-                android:id="@+id/effectCategory"
-                android:layout_width="@dimen/default_item_height"
-                android:layout_height="@dimen/default_item_height"/>
-        </LinearLayout>
+        </RelativeLayout>
         <generalapps.vocal.InvisibleView
             android:id="@+id/blackTint"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="@dimen/default_item_height"
             android:clickable="true"
             android:visibility="invisible"/>
     </android.support.v7.widget.CardView>

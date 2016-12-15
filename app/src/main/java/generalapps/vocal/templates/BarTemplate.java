@@ -36,8 +36,12 @@ public class BarTemplate {
         return (beats % Rhythm.maxBeats()) % (mRecordingLength*Rhythm.bpb) == 0;
     }
 
+    public int getIndex(){
+        return list.indexOf(this);
+    }
+
     public void serialize(Audio.MetaData meta){
-        meta.barTemplateIndex = list.indexOf(this);
+        meta.barTemplateIndex = getIndex();
     }
 
     public static BarTemplate deSerialize(Audio.MetaData meta){

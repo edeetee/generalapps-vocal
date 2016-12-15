@@ -33,9 +33,17 @@ public class Effect {
 
     private Effect(){}
 
+    public int getCategoryIndex(){
+        return EffectCategory.list.indexOf(category);
+    }
+
+    public int getEffectIndex(){
+        return category.indexOf(this);
+    }
+
     public void serialize(Audio.MetaData meta){
-        meta.effectCategoryIndex = EffectCategory.list.indexOf(category);
-        meta.effectIndex = category.indexOf(this);
+        meta.effectCategoryIndex = getCategoryIndex();
+        meta.effectIndex = getEffectIndex();
     }
 
     public static Effect deSerialize(Audio.MetaData meta){
@@ -44,6 +52,7 @@ public class Effect {
     }
 
     public static Effect none = new Effect();
+    private static EffectCategory loadNone = EffectCategory.none;
 
     @DrawableRes public int mIcon;
     public Audio.AudioEffectApplier mProcessor;

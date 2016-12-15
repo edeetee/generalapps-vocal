@@ -13,14 +13,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.RelativeLayout;
-import android.widget.Toast;
-
-import com.google.firebase.database.DataSnapshot;
-import com.google.firebase.database.DatabaseError;
-import com.google.firebase.database.DatabaseReference;
-import com.google.firebase.database.ValueEventListener;
-
-import java.io.File;
 
 import generalapps.vocal.effects.Effect;
 import generalapps.vocal.effects.EffectAdapter;
@@ -33,30 +25,18 @@ public class RecorderFragment extends Fragment implements
         OnEffectCategoryChangeListener,
         EffectAdapter.OnEffectSelectedListener{
 
-    public static final String ITEM_KEY = "track_key";
-
     RecorderAdapter adapter;
     Context context;
     RecorderCircle recordProgress;
     RelativeLayout rootLayout;
     RecyclerView recycler;
     ColorView blackTint;
-    Track.MetaData trackMeta;
+    Track mTrack;
 
     Handler handler = new Handler();
 
-    public interface TrackInstantiatedListener{
-        void TrackInstantiated(Track track);
-    }
-    TrackInstantiatedListener mCallback;
-
     public static RecorderFragment newInstance(Track.MetaData meta){
         RecorderFragment fragment = new RecorderFragment();
-
-        Bundle args = new Bundle();
-        args.putSerializable(ITEM_KEY, meta);
-        fragment.setArguments(args);
-
         return fragment;
     }
 
@@ -65,8 +45,6 @@ public class RecorderFragment extends Fragment implements
         super.onAttach(context);
         this.context = context;
         MainActivity.recorder.setOnRecorderStateChangeListener(this);
-
-        mCallback = (TrackInstantiatedListener)getParentFragment();
     }
 
     @Override
@@ -82,7 +60,7 @@ public class RecorderFragment extends Fragment implements
         if(effectSelection == null){
             effectSelection = holder;
             blackTint.setVisibility(View.VISIBLE);
-            holder.setSpecialFloat(rootLayout);
+            holder.setEffectHover(rootLayout);
         }
     }
 
@@ -95,37 +73,31 @@ public class RecorderFragment extends Fragment implements
         return false;
     }
 
+    public void setTrack(Track track){
+        mTrack = track;
+    }
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        if(savedInstanceState == null){
-            savedInstanceState = getArguments();
-        }
-
-        if(savedInstanceState != null)
-            if(savedInstanceState.containsKey(ITEM_KEY))
-                trackMeta = (Track.MetaData) savedInstanceState.getSerializable(ITEM_KEY);
-
-        HowTo.Basic("HowTo: Record",
-                "To record, hold down the recording circle at the bottom. Click to play. If you are already playing, holding to record will wait till the end of the bars and count you in.",
-                MainActivity.context);
+        setRetainInstance(true);
     }
 
     @Override
     public void onPause() {
         super.onPause();
 
-        adapter.stop();
+        //adapter.stop();
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, final ViewGroup container, Bundle savedInstanceState) {
         View fragView = inflater.inflate(R.layout.record_fragment, container, false);
 
-        adapter = new RecorderAdapter(context, this);
-
-        mCallback.TrackInstantiated((trackMeta == null) ? new Track(adapter) : new Track(trackMeta, adapter));
+        if(savedInstanceState == null){
+            adapter = new RecorderAdapter(context, this);
+            mTrack.addOnTrackChangeListener(adapter);
+        }
 
         recycler = (RecyclerView)fragView.findViewById(R.id.mainRecycler);
         recycler.setAdapter(adapter);
@@ -163,14 +135,11 @@ public class RecorderFragment extends Fragment implements
                 Recorder.State state = MainActivity.recorder.getState();
                 if(adapter.getGroupSize() != 0 && state == Recorder.State.NONE){
                     //if current editor
-                    if(adapter.group.numEditors() <= adapter.getGroupSize() || adapter.group.getEditor(adapter.getGroupSize()).uid.equals(MainActivity.user.uid))
+                    if(adapter.group.canRecord(context)) {
                         if(!adapter.playing)
-                            MainActivity.recorder.record(RecorderFragment.this);
+                            MainActivity.recorder.record(adapter.group);
                         else
                             adapter.recordAtEnd();
-                    else{
-                        Toast editorToast = Toast.makeText(context, "You cannot record because you are not the editor for this recording", Toast.LENGTH_LONG);
-                        editorToast.show();
                     }
                 }
                 return true;
@@ -185,17 +154,16 @@ public class RecorderFragment extends Fragment implements
                 //recording let go
                 if((state == Recorder.State.RECORDING || state == Recorder.State.PREPARED)
                         && action == MotionEvent.ACTION_UP){
+                    int preSize = adapter.group.size();
                     MainActivity.recorder.stop();
-                    adapter.play(recordProgress);
+                    //only play if sucessfully recorded
+                    if(adapter.group.size() == preSize)
+                        adapter.play(recordProgress);
                 }
                 //if first recording
-                if(state == Recorder.State.NONE && adapter.getGroupSize() == 0 && action == MotionEvent.ACTION_DOWN){
-                    if(adapter.group.numEditors() <= adapter.getGroupSize() || adapter.group.getEditor(adapter.getGroupSize()).uid.equals(MainActivity.user.uid))
-                        MainActivity.recorder.record(RecorderFragment.this);
-                    else{
-                        Toast editorToast = Toast.makeText(context, "You cannot record because you are not the editor for this recording", Toast.LENGTH_LONG);
-                        editorToast.show();
-                    }
+                if(state == Recorder.State.NONE && adapter.getGroupSize() == 0 && action == MotionEvent.ACTION_DOWN) {
+                    if (adapter.group.canRecord(context))
+                        MainActivity.recorder.record(adapter.group);
 
                 }
                 return false;
@@ -213,16 +181,13 @@ public class RecorderFragment extends Fragment implements
             }
         });
 
+        MainActivity.recorder.setRecordProgress(recordProgress);
+
+        if(savedInstanceState == null)
+            ((MainActivity)getActivity()).howToOverlayLayout.tryHelpingView(HowToOverlayLayout.HowToInfo.RECORDER_CIRCLE, recordProgress);
+
         return fragView;
     }
-
-
-
-    @Override
-    public void onSaveInstanceState(Bundle outState) {
-        outState.putSerializable(ITEM_KEY, trackMeta);
-    }
-
 
     @Override
     public void Play() {
@@ -244,5 +209,11 @@ public class RecorderFragment extends Fragment implements
             recordProgress.stopLoop();
             recordProgress.setText("");
         }
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        adapter.cleanup();
     }
 }

@@ -30,7 +30,7 @@ public abstract class FilteredFirebaseRecyclerAdapter<VH extends RecyclerView.Vi
     }
     Filter mFilter;
 
-    public FilteredFirebaseRecyclerAdapter(Class<VH> viewHolderClass, int layout, DatabaseReference ref){
+    public FilteredFirebaseRecyclerAdapter(Class<VH> viewHolderClass, int layout, Query ref){
         mViewHolderClass = viewHolderClass;
         mLayout = layout;
 
@@ -42,8 +42,9 @@ public abstract class FilteredFirebaseRecyclerAdapter<VH extends RecyclerView.Vi
     public void setFilter(Filter filter){
         mFilter = filter;
         mRef.removeEventListener(this);
+        int count = items.size();
         items = new ArrayList<>();
-        notifyDataSetChanged();
+        notifyItemRangeRemoved(0, count);
         mRef.addChildEventListener(this);
     }
 
@@ -61,7 +62,7 @@ public abstract class FilteredFirebaseRecyclerAdapter<VH extends RecyclerView.Vi
     public int findKeyPosition(String key){
         int position = 0;
         for(DataSnapshot curItem : items){
-            if(key.equals(curItem.getKey())){
+            if(curItem.getKey().equals(key)){
                 return position;
             }
             position++;
@@ -92,6 +93,10 @@ public abstract class FilteredFirebaseRecyclerAdapter<VH extends RecyclerView.Vi
         populateViewHolder(holder, items.get(position));
     }
 
+    DataSnapshot getItem(int pos){
+        return items.get(pos);
+    }
+
     public abstract void populateViewHolder(VH holder, DataSnapshot item);
 
     @Override
@@ -99,11 +104,15 @@ public abstract class FilteredFirebaseRecyclerAdapter<VH extends RecyclerView.Vi
         return items.size();
     }
 
+    void cleanup(){
+        mRef.removeEventListener(this);
+    }
+
     @Override
     public void onChildAdded(DataSnapshot dataSnapshot, String previousChildKey) {
         //TODO check if exists from previous filter to enable move animations etc when changing filter
 
-        int index = findKeyPosition(previousChildKey) + 1;
+        int index = previousChildKey != null ? findKeyPosition(previousChildKey) + 1 : 0;
         //if prevChildKey == null or not in list, add to end
         if(index == 0)
             index = items.size();

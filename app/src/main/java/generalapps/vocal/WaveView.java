@@ -8,6 +8,8 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
+import android.support.v4.content.ContextCompat;
+import android.support.v4.graphics.ColorUtils;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
@@ -26,8 +28,6 @@ public class WaveView extends View {
 
     private Audio audio;
     private BarTemplate template;
-
-    static int[] BARCOLORS = {Color.CYAN, Color.BLUE};//, Color.GREEN, Color.MAGENTA};
 
     static int tickInterval = Recorder.FREQ/40;
 
@@ -51,34 +51,37 @@ public class WaveView extends View {
     }
 
     private void init(){
+
         wavePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        wavePaint.setColor(Color.BLUE);
+        wavePaint.setColor(ContextCompat.getColor(getContext(), R.color.accent));
         wavePaint.setStyle(Paint.Style.FILL);
 
         disabledWavePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        disabledWavePaint.setColor(Color.DKGRAY);
+        disabledWavePaint.setColor(ContextCompat.getColor(getContext(), R.color.accent));
         disabledWavePaint.setStyle(Paint.Style.STROKE);
+        disabledWavePaint.setStrokeWidth(5f);
+        disabledWavePaint.setStrokeCap(Paint.Cap.ROUND);
+        disabledWavePaint.setStrokeJoin(Paint.Join.ROUND);
 
-        progressPaint = new Paint();
-        progressPaint.setColor(Color.RED);
+        progressPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        progressPaint.setColor(ContextCompat.getColor(getContext(), material.values.R.color.material_color_red_800));
         progressPaint.setStrokeWidth(2.0f);
 
-        barPaint = new Paint[BARCOLORS.length];
-        for(int i = 0; i < BARCOLORS.length; i++){
-            barPaint[i] = new Paint();
-            barPaint[i].setColor(BARCOLORS[i]);
-            barPaint[i].setAlpha(100);
+        int[] barColors = new int[]{ContextCompat.getColor(getContext(), R.color.primary), ContextCompat.getColor(getContext(), R.color.primary_dark)};
+        barPaint = new Paint[barColors.length];
+        for(int i = 0; i < barColors.length; i++){
+            barPaint[i] = new Paint(Paint.ANTI_ALIAS_FLAG);
+            barPaint[i].setColor(barColors[i]);
         }
-        barTrianglePaint = new Paint();
-        barTrianglePaint.setColor(Color.BLACK);
+        barTrianglePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        barTrianglePaint.setColor(ContextCompat.getColor(getContext(), R.color.primary_light));
 
-        disabledBarPaint = new Paint();
-        disabledBarPaint.setColor(Color.LTGRAY);
-        disabledBarPaint.setAlpha(100);
+        disabledBarPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        disabledBarPaint.setColor(ContextCompat.getColor(getContext(), R.color.background_lighter));
 
-        beatLinePaint = new Paint();
-        beatLinePaint.setColor(Color.BLACK);
-        beatLinePaint.setAlpha(50);
+        beatLinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        beatLinePaint.setColor(ContextCompat.getColor(getContext(), R.color.divider));
+        beatLinePaint.setAlpha(100);
     }
 
     public void setAudio(Audio audio){
@@ -115,7 +118,7 @@ public class WaveView extends View {
                         int xNext = w * (i + 1)  * tickInterval / audio.group.maxTicks() + xMod + delayShift;
 
                         //exit point. Either end of wave values or reached end of bar
-                        if (audio.waveValues.size() == i+1 || (xMod + w * template.mRecordingLength / Rhythm.maxBars) < x) {
+                        if (audio.waveValues.size() <= i+1 || (xMod + w * template.mRecordingLength / Rhythm.maxBars) < x) {
                             wavePath.lineTo(x, h / 2);
                             break;
                         //don't draw if delay has it shifted before margin
@@ -195,7 +198,8 @@ public class WaveView extends View {
                 canvas.drawRect(bars.get(i), audio.enabled && template.mEnabledBars[i] ? barPaint[i%barPaint.length] : disabledBarPaint);
             }
 
-            for(int i = 1; i < Rhythm.bpb*Rhythm.maxBars; i++){
+            //bar lines
+            for(int i = 0; i <= Rhythm.bpb*Rhythm.maxBars; i++){
                 int x = w*i/(Rhythm.bpb*Rhythm.maxBars);
                 canvas.drawLine(x, 0, x, h, beatLinePaint);
             }

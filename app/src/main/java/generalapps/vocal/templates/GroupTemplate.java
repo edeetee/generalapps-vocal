@@ -32,11 +32,12 @@ public class GroupTemplate {
     }
 
     public void serialize(Audio.MetaData meta){
-        meta.groupTemplateIndex = list.indexOf(this);
+        //meta.groupTemplateIndex = list.indexOf(this);
     }
 
     public static GroupTemplate deSerialize(Audio.MetaData meta){
-        return list.get(meta.groupTemplateIndex);
+        //return list.get(meta.groupTemplateIndex);
+        return null;
     }
 
     public static List<GroupTemplate> list = new ArrayList<>(Arrays.asList(

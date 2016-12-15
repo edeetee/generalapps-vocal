@@ -3,6 +3,7 @@ package generalapps.vocal;
 
 import android.Manifest;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
@@ -11,12 +12,15 @@ import android.support.v4.app.FragmentTransaction;
 import android.support.v4.content.ContextCompat;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.preference.PreferenceManager;
+import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.EditText;
+import android.widget.ImageView;
 
 import com.firebase.ui.auth.AuthUI;
-import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.UserInfo;
 import com.google.firebase.database.DataSnapshot;
@@ -25,40 +29,67 @@ import com.google.firebase.database.DatabaseException;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
-public class MainActivity extends AppCompatActivity implements TracksFragment.TracksFragmentListener {
+public class MainActivity extends AppCompatActivity implements TracksListFragment.TracksFragmentListener, SharedPreferences.OnSharedPreferenceChangeListener {
 
     static Recorder recorder;
     static MainActivity context;
-    //static RecorderFragment recFrag;
     FragmentManager fragManager;
     static FirebaseStorage storage;
     static StorageReference storageRef;
     static FirebaseDatabase database;
     static FirebaseAuth auth;
     static User user;
-
-    boolean started = false;
+    static FirebaseMessaging messaging;
 
     static String MAIN_FRAGMENT_TAG = "MAIN_FRAGMENT_TAG";
     static int RC_SIGN_IN = 10231;
 
+    HowToOverlayLayout howToOverlayLayout;
+    Toolbar toolBar;
+    EditText title;
+    ImageView editButton;
+
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        init();
     }
 
     @Override
-    protected void onSaveInstanceState(Bundle outState) {
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+        recorder.initRecorder();
+    }
+
+    String trackToLoad;
+
+    void doIntentExtras(Bundle extras){
+        //if is special notification
+        if(Boolean.valueOf(extras.getString("vocalNotification"))){
+            switch (extras.getString("type", "")){
+                //special notification to open track
+                case VocalNotifications.OPEN_TRACK:
+                    trackToLoad = extras.getString("trackKey");
+            }
+        }
     }
 
     @Override
-    protected void onRestoreInstanceState(Bundle savedInstanceState) {
+    protected void onNewIntent(Intent intent) {
+        setIntent(intent);
+        if(intent.getExtras() != null)
+            doIntentExtras(getIntent().getExtras());
     }
+
+    boolean isReloading = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,71 +97,67 @@ public class MainActivity extends AppCompatActivity implements TracksFragment.Tr
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main_activity);
 
+        isReloading = savedInstanceState != null;
+
+        howToOverlayLayout = (HowToOverlayLayout)findViewById(R.id.howToOverlay);
+
+        toolBar = (Toolbar) findViewById(R.id.my_toolbar);
+        editButton = (ImageView)toolBar.findViewById(R.id.editTitle);
+        title = (EditText)toolBar.findViewById(R.id.title);
+        setSupportActionBar(toolBar);
+        getSupportActionBar().setDisplayShowTitleEnabled(false);
+
         if(getIntent().getExtras() != null)
-            for (String s : getIntent().getExtras().keySet()) {
-                Object value = getIntent().getExtras().get(s);
-            }
+            doIntentExtras(getIntent().getExtras());
 
         //check permissions
-        if(ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED){
-            ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.RECORD_AUDIO}, 0);
-        }
-        if(ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
-            ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE}, 1);
-        }
-        if(!started){
-            recorder = new Recorder(this);
+        List<String> permissions = new ArrayList<>(Arrays.asList(android.Manifest.permission.RECORD_AUDIO, Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.VIBRATE));
+        for (int i = 0; i < permissions.size(); i++)
+            if(ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+                permissions.remove(i);
 
-            //new AndroidFFMPEGLocator(this);
 
-            //TODO make work with restart again
+        if(permissions.size() == 0)
+            init();
+        else
+            ActivityCompat.requestPermissions(this, permissions.toArray(new String[0]), 1);
+
+        storage = FirebaseStorage.getInstance();
+        messaging = FirebaseMessaging.getInstance();
+        database = FirebaseDatabase.getInstance();
+        storageRef = MainActivity.storage.getReferenceFromUrl("gs://vocal-d80ba.appspot.com/");
+        auth = FirebaseAuth.getInstance();
+        fragManager = getSupportFragmentManager();
+    }
+
+    void init(){
+        recorder = new Recorder(this);
+
+        new File(ContextCompat.getDataDir(this), "files/audios").mkdirs();
+
+        if(!isReloading){
             try{
                 FirebaseDatabase.getInstance().setPersistenceEnabled(true);
             } catch(DatabaseException e){
-                Log.e("MainActivity", "setPersistenceEnabled Failed", e);
+                Log.w("MainActivity", "setPersistenceEnabled Failed");
             }
-
-            storage = FirebaseStorage.getInstance();
-            database = FirebaseDatabase.getInstance();
-            storageRef = MainActivity.storage.getReferenceFromUrl("gs://vocal-d80ba.appspot.com/");
-            auth = FirebaseAuth.getInstance();
-            fragManager = getSupportFragmentManager();
 
             if(auth.getCurrentUser() == null){
                 startActivityForResult(AuthUI.getInstance()
-                        .createSignInIntentBuilder().build(), RC_SIGN_IN);
+                        .createSignInIntentBuilder()
+                        .setTheme(R.style.AppTheme).build(), RC_SIGN_IN);
             } else {
                 makeUserThenStart();
             }
         }
+
+        PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(this);
     }
 
-    private void makeUserThenStart(){
-        final UserInfo userInfo = auth.getCurrentUser();
-        final DatabaseReference ref = database.getReference("users").child(userInfo.getUid());
-        ref.addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                if(dataSnapshot.getValue() == null){
-                    user = new User(userInfo);
-                    ref.setValue(user);
-                } else
-                    user = dataSnapshot.getValue(User.class);
-                start();
-            }
-
-            @Override
-            public void onCancelled(DatabaseError databaseError) {
-
-            }
-        });
-    }
-
-    public void start(){
-        started = true;
-        FragmentTransaction trans = fragManager.beginTransaction();
-        trans.add(R.id.fragmentContainer, new TracksFragment(), MAIN_FRAGMENT_TAG);
-        trans.commit();
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        recorder.releaseRecorder();
     }
 
     @Override
@@ -143,12 +170,52 @@ public class MainActivity extends AppCompatActivity implements TracksFragment.Tr
         }
     }
 
+    private void makeUserThenStart(){
+        final UserInfo userInfo = auth.getCurrentUser();
+        user = new User(userInfo);
+        final DatabaseReference ref = database.getReference("users").child(userInfo.getUid());
+        ref.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if(!dataSnapshot.exists() || !dataSnapshot.getValue(User.class).equals(user)){
+                    ref.setValue(user);
+                }
+                start();
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+
+            }
+        });
+    }
+
+    public void start(){
+        if(fragManager.findFragmentByTag(MAIN_FRAGMENT_TAG) == null){
+            FragmentTransaction trans = fragManager.beginTransaction();
+            trans.add(R.id.trackFragment, new TracksListFragment(), MAIN_FRAGMENT_TAG);
+            trans.commit();
+        }
+        if(trackToLoad != null)
+            database.getReference("meta").child("tracks").child(trackToLoad).addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(DataSnapshot dataSnapshot) {
+                    OnTrackSelected(dataSnapshot.getValue(Track.MetaData.class));
+                }
+
+                @Override
+                public void onCancelled(DatabaseError databaseError) {
+
+                }
+            });
+    }
+
     @Override
     public void OnTrackSelected(Track.MetaData meta) {
-        TrackPagerFragment fragment = TrackPagerFragment.newInstance(meta);
+        TrackFragment fragment = TrackFragment.newInstance(meta);
 
         FragmentTransaction transaction = fragManager.beginTransaction();
-        transaction.replace(R.id.fragmentContainer, fragment, MAIN_FRAGMENT_TAG);
+        transaction.replace(R.id.trackFragment, fragment, MAIN_FRAGMENT_TAG);
         transaction.addToBackStack(null);
 
         transaction.commit();
@@ -156,10 +223,10 @@ public class MainActivity extends AppCompatActivity implements TracksFragment.Tr
 
     @Override
     public void OnNewTrack() {
-        TrackPagerFragment fragment = new TrackPagerFragment();
+        TrackFragment fragment = new TrackFragment();
 
         FragmentTransaction transaction = fragManager.beginTransaction();
-        transaction.replace(R.id.fragmentContainer, fragment, MAIN_FRAGMENT_TAG);
+        transaction.replace(R.id.trackFragment, fragment, MAIN_FRAGMENT_TAG);
         transaction.addToBackStack(null);
 
         transaction.commit();
@@ -167,6 +234,11 @@ public class MainActivity extends AppCompatActivity implements TracksFragment.Tr
 
     @Override
     public void onBackPressed() {
+        if(howToOverlayLayout.isOn()){
+            howToOverlayLayout.clear();
+            return;
+        }
+
         try{
             BackOverrideFragment curRecorder = (BackOverrideFragment)getSupportFragmentManager().findFragmentByTag(MAIN_FRAGMENT_TAG);
             if(curRecorder != null && curRecorder.processBackPressed())
@@ -190,7 +262,7 @@ public class MainActivity extends AppCompatActivity implements TracksFragment.Tr
             } else{
                 SettingsFragment fragment = new SettingsFragment();
                 FragmentTransaction transaction = fragManager.beginTransaction();
-                transaction.replace(R.id.fragmentContainer, fragment, MAIN_FRAGMENT_TAG);
+                transaction.replace(R.id.trackFragment, fragment, MAIN_FRAGMENT_TAG);
                 transaction.addToBackStack(null);
                 transaction.commit();
             }
