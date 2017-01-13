@@ -194,7 +194,7 @@ public class HowToOverlay{
                 Rect parentRect = new Rect();
                 parent.getGlobalVisibleRect(parentRect);
 
-                FrameLayout.LayoutParams boxParams = new FrameLayout.LayoutParams(viewRect.width(), viewRect.height());
+                final FrameLayout.LayoutParams boxParams = new FrameLayout.LayoutParams(viewRect.width(), viewRect.height());
                 boxParams.leftMargin = viewRect.left;
                 boxParams.topMargin = viewRect.top - parentRect.top;
 
@@ -203,19 +203,24 @@ public class HowToOverlay{
                 outline.setVisibility(aspect*1.1 < 1 || 1 < aspect/1.1 ? View.VISIBLE : View.GONE);
                 parent.addView(outline, boxParams);
 
-                final FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                params.leftMargin = 20;
-                params.bottomMargin = 20;
-                params.topMargin = 20;
+                final RelativeLayout.LayoutParams buttonParams = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                buttonParams.leftMargin = 20;
+                buttonParams.bottomMargin = 20;
+                buttonParams.topMargin = 20;
+                if(info == EFFECTS || info == CONTRIBUTORS || info == ARTIST_SEARCH)
+                    buttonParams.addRule(RelativeLayout.BELOW, R.id.my_toolbar);
+                else
+                    buttonParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
                 //if top separation is largest separation
                 //params.topMargin = viewRect.top;
                 // params.bottomMargin = parentRect.bottom - viewRect.bottom;
-                params.gravity = info == EFFECTS || info == CONTRIBUTORS || info == ARTIST_SEARCH ? Gravity.TOP : Gravity.BOTTOM;
-                parent.addView(gotIt, params);
+                parent.addView(gotIt, buttonParams);
 
                 gotIt.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
+                        parent.removeView(gotIt);
+                        parent.removeView(outline);
                         tapTarget.dismiss(false);
                     }
                 });
@@ -233,10 +238,6 @@ public class HowToOverlay{
                         .tintTarget(false), new TapTargetView.Listener(){
                     @Override
                     public void onTargetDismissed(TapTargetView view, boolean userInitiated) {
-                        if(parent.isShown()){
-                            parent.removeView(gotIt);
-                            parent.removeView(outline);
-                        }
                         if(callback != null)
                             callback.run();
                     }
@@ -251,10 +252,15 @@ public class HowToOverlay{
                     public boolean onTouch(View v, MotionEvent event) {
                         //if inside, don't consume event and dismiss thingy
                         if((finalViewRect.contains((int)event.getRawX(), (int)event.getRawY()))){
-                            if(callback == null)
+                            if(callback == null){
+                                parent.removeView(gotIt);
+                                parent.removeView(outline);
                                 tapTarget.dismiss(true);
+                            }
                             return false;
                         } else if (event.getAction() == MotionEvent.ACTION_UP && callback == null){
+                            parent.removeView(gotIt);
+                            parent.removeView(outline);
                             tapTarget.dismiss(false);
                         }
                         return true;
