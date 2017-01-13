@@ -9,6 +9,7 @@
         <item name="android:textColorPrimary">@color/primary_text</item>
         <item name="android:textColorSecondary">@color/secondary_text</item>
         <item name="android:windowBackground">@color/background</item>
+        <item name="android:colorButtonNormal">@color/primary_light</item>
 
         <!-- Customize your theme here. -->
     </style>

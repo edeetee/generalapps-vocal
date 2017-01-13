@@ -14,23 +14,27 @@ import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.RelativeLayout;
 
+import java.util.List;
+
 import generalapps.vocal.effects.Effect;
 import generalapps.vocal.effects.EffectAdapter;
 
+import generalapps.vocal.HowToOverlay.HowToInfo;
+
+import static android.view.MotionEvent.ACTION_CANCEL;
+import static android.view.MotionEvent.ACTION_UP;
+import static java.util.Arrays.asList;
+
 
 public class RecorderFragment extends Fragment implements
-        BackOverrideFragment,
         RecorderAdapter.OnMusicAdapterChangeListener,
-        Recorder.OnRecorderStateChangeListener,
-        OnEffectCategoryChangeListener,
-        EffectAdapter.OnEffectSelectedListener{
+        Recorder.OnRecorderStateChangeListener{
 
     RecorderAdapter adapter;
     Context context;
     RecorderCircle recordProgress;
     RelativeLayout rootLayout;
     RecyclerView recycler;
-    ColorView blackTint;
     Track mTrack;
 
     Handler handler = new Handler();
@@ -47,32 +51,6 @@ public class RecorderFragment extends Fragment implements
         MainActivity.recorder.setOnRecorderStateChangeListener(this);
     }
 
-    @Override
-    public void OnEffectSelected(Effect effect) {
-        effectSelection = null;
-        blackTint.setVisibility(View.INVISIBLE);
-    }
-
-    RecorderAdapter.AudioHolder effectSelection;
-
-    @Override
-    public void OnEffectCategoryChanging(RecorderAdapter.AudioHolder holder) {
-        if(effectSelection == null){
-            effectSelection = holder;
-            blackTint.setVisibility(View.VISIBLE);
-            holder.setEffectHover(rootLayout);
-        }
-    }
-
-    @Override
-    public boolean processBackPressed() {
-        if(effectSelection == null)
-            return true;
-
-        effectSelection.OnEffectSelected(Effect.none);
-        return false;
-    }
-
     public void setTrack(Track track){
         mTrack = track;
     }
@@ -84,18 +62,11 @@ public class RecorderFragment extends Fragment implements
     }
 
     @Override
-    public void onPause() {
-        super.onPause();
-
-        //adapter.stop();
-    }
-
-    @Override
     public View onCreateView(LayoutInflater inflater, final ViewGroup container, Bundle savedInstanceState) {
         View fragView = inflater.inflate(R.layout.record_fragment, container, false);
 
         if(savedInstanceState == null){
-            adapter = new RecorderAdapter(context, this);
+            adapter = new RecorderAdapter(context, this, (TrackFragment)getParentFragment());
             mTrack.addOnTrackChangeListener(adapter);
         }
 
@@ -105,24 +76,17 @@ public class RecorderFragment extends Fragment implements
 
         rootLayout = (RelativeLayout)fragView.findViewById(R.id.rootLayout);
 
-        blackTint = (ColorView)fragView.findViewById(R.id.blackTint);
-        blackTint.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if(effectSelection != null)
-                    effectSelection.OnEffectSelected(Effect.none);
-            }
-        });
-
         recordProgress = (RecorderCircle)fragView.findViewById(R.id.recordProgress);
+        adapter.setRecordProgress(recordProgress);
         //recordProgress.setMax(4);
         recordProgress.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if(adapter.group.size() == 0)
+                    return;
                 if(!adapter.playing){
-                    adapter.play(recordProgress);
-                }
-                else{
+                    adapter.play();
+                }else{
                     adapter.stop();
                 }
             }
@@ -140,35 +104,59 @@ public class RecorderFragment extends Fragment implements
                             MainActivity.recorder.record(adapter.group);
                         else
                             adapter.recordAtEnd();
+                        recycler.smoothScrollBy(0, 200);
                     }
+                    return true;
                 }
-                return true;
+                return false;
             }
         });
         //stopping recording
         recordProgress.setOnTouchListener(new View.OnTouchListener() {
+            boolean tryLongPress = false;
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 Recorder.State state = MainActivity.recorder.getState();
                 int action = event.getAction();
                 //recording let go
                 if((state == Recorder.State.RECORDING || state == Recorder.State.PREPARED)
-                        && action == MotionEvent.ACTION_UP){
-                    int preSize = adapter.group.size();
-                    MainActivity.recorder.stop();
-                    //only play if sucessfully recorded
-                    if(adapter.group.size() == preSize)
-                        adapter.play(recordProgress);
+                        && (action == ACTION_UP || action == ACTION_CANCEL)){
+                    if(MainActivity.recorder.stop())
+                        adapter.play();
+                    return true;
                 }
                 //if first recording
-                if(state == Recorder.State.NONE && adapter.getGroupSize() == 0 && action == MotionEvent.ACTION_DOWN) {
-                    if (adapter.group.canRecord(context))
-                        MainActivity.recorder.record(adapter.group);
-
+                if(state == Recorder.State.NONE && action == MotionEvent.ACTION_DOWN) {
+                    if(adapter.getGroupSize() == 0) {
+                        if (adapter.group.canRecord(context))
+                            MainActivity.recorder.record(adapter.group);
+                    }else{
+                        recordProgress.postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                if(tryLongPress){
+                                    tryLongPress = false;
+                                    recordProgress.performLongClick();
+                                }
+                            }
+                        }, 150);
+                        tryLongPress = true;
+                    }
+                    return true;
+                }
+                if(tryLongPress){
+                    switch(action){
+                        case ACTION_UP:
+                            recordProgress.performClick();
+                        case ACTION_CANCEL:
+                            tryLongPress = false;
+                            return true;
+                    }
                 }
                 return false;
             }
         });
+        recordProgress.setLongClickable(false);
         recordProgress.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
             public void onGlobalLayout() {
@@ -184,31 +172,62 @@ public class RecorderFragment extends Fragment implements
         MainActivity.recorder.setRecordProgress(recordProgress);
 
         if(savedInstanceState == null)
-            ((MainActivity)getActivity()).howToOverlayLayout.tryHelpingView(HowToOverlayLayout.HowToInfo.RECORDER_CIRCLE, recordProgress);
+            HowToOverlay.showHelpIfUnseen(HowToOverlay.HowToInfo.RECORDER_CIRCLE, recordProgress);
 
         return fragView;
     }
 
     @Override
     public void Play() {
-        recordProgress.setInnerBottomText("Stop");
+        recordProgress.setPlaying(true);
     }
 
     @Override
     public void Stop() {
-        recordProgress.setInnerBottomText("Play/Record");
+        recordProgress.setPlaying(false);
     }
 
     @Override
     public void OnRecorderStateChange(Recorder.State state) {
         if(state == Recorder.State.ENDING){
+            if(adapter.recordAtEnd)
+                adapter.stopRecordAtEnd();
+        }else if (state == Recorder.State.NONE) {
             recordProgress.removeCallbacks(MainActivity.recorder.beatInRunnable);
-            recordProgress.removeCallbacks(MainActivity.recorder.countDownRunnable);
-
-            recordProgress.setDoHighText(false);
             recordProgress.stopLoop();
-            recordProgress.setText("");
+            recordProgress.hideBeat();
         }
+        if (state == Recorder.State.NONE && mTrack != null && mTrack.first != null){
+            RecorderAdapter.AudioHolder holder = mTrack.first.holder;
+            View adjustView = adapter.adjust != null ? adapter.adjust.adjustLayout : null;
+            HowToOverlay.doHelpList(asList(HowToInfo.PLAY_CIRCLE, HowToInfo.DELETE, HowToInfo.ADJUST, HowToInfo.LEFT_ADJUST, HowToInfo.BAR_TEMPLATE, HowToInfo.EFFECTS, HowToInfo.MUTE, HowToInfo.ADD_MORE, HowToInfo.FIRST_SETUP),
+                asList(recordProgress, holder.barTemplate, adjustView, holder.lowestParent, holder.barTemplate, holder.effectCategorySelector, holder.barTemplate, recordProgress, ((TrackFragment) getParentFragment()).publishFAB),
+                    new HowToOverlay.MiddleCallback() {
+                        @Override
+                        public <T extends View> int done(List<HowToInfo> infos, List<T> helpingView, int index) {
+                            //if last index was a record button make sure is still playing
+                            if(0 < index && helpingView.get(index-1) == recordProgress)
+                                if(!adapter.playing)
+                                    adapter.play();
+
+                            //if adjust is null
+                            if(infos.get(index) == HowToInfo.ADJUST && helpingView.get(index) == null)
+                                return index+1;
+                            //if there are no recordings left, reset and do record again
+                            if(mTrack.size() == 0){
+                                HowToOverlay.showHelp(HowToOverlay.HowToInfo.RECORDER_CIRCLE, recordProgress);
+                                return infos.size();
+                            }
+                            return index;
+                        }
+                    });
+        }
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        adapter.stop();
     }
 
     @Override

@@ -62,7 +62,7 @@ public class EffectAdapter extends BaseAdapter {
             FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(width, width);
 
             layout.addView(image, params);
-            layout.setBackgroundResource(R.drawable.round_rect_shape);
+            layout.setBackgroundResource(effect != Effect.none ? R.drawable.round_rect_shape : 0);
         }
 
         return view;

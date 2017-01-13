@@ -25,13 +25,15 @@ import java.io.PipedInputStream;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.concurrent.Callable;
+import java.util.prefs.PreferenceChangeEvent;
+import java.util.prefs.PreferenceChangeListener;
 
 import generalapps.vocal.audioGen.AudioGenerator;
 
 /**
  * Created by edeetee on 14/04/2016.
  */
-public class Recorder {
+public class Recorder implements SharedPreferences.OnSharedPreferenceChangeListener {
 
     enum State {
         NONE, PREPARED, RECORDING, ENDING
@@ -71,23 +73,28 @@ public class Recorder {
         initRecorder();
     }
 
-    void initRecorder(){
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainActivity.context);
-        boolean newIsStereo = prefs.getBoolean("pref_stereo", false);
-        if(isStereo != newIsStereo || recorder == null){
+
+    @Override
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+        boolean newIsStereo = sharedPreferences.getBoolean("pref_stereo", false);
+        if(isStereo != newIsStereo){
             isStereo = newIsStereo;
-            int channel_in = isStereo ? AudioFormat.CHANNEL_IN_STEREO : AudioFormat.CHANNEL_IN_MONO;
-
-            releaseRecorder();
-
-            buffer = AudioRecord.getMinBufferSize(FREQ, channel_in, AudioFormat.ENCODING_PCM_16BIT);
-            recorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT,
-                    FREQ,
-                    channel_in,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    buffer);
-            recorder.startRecording();
+            initRecorder();
         }
+    }
+
+    void initRecorder(){
+        int channel_in = isStereo ? AudioFormat.CHANNEL_IN_STEREO : AudioFormat.CHANNEL_IN_MONO;
+
+        releaseRecorder();
+
+        buffer = AudioRecord.getMinBufferSize(FREQ, channel_in, AudioFormat.ENCODING_PCM_16BIT);
+        recorder = new AudioRecord(MediaRecorder.AudioSource.DEFAULT,
+                FREQ,
+                channel_in,
+                AudioFormat.ENCODING_PCM_16BIT,
+                buffer);
+        recorder.startRecording();
     }
 
     void releaseRecorder(){
@@ -143,36 +150,9 @@ public class Recorder {
         setState(State.PREPARED);
     }
 
-    //region countDown
-    private void startRecordingCountDown(){
-        recordProgress.setDoHighText(true);
-        countDownRunnable = new CountDownRunnable();
-        recordProgress.post(countDownRunnable);
-    }
-
-    CountDownRunnable countDownRunnable;
-    private class CountDownRunnable implements Runnable {
-        int count = 3;
-        @Override
-        public void run() {
-            recordProgress.postDelayed(this, 500);
-            if(count == 0){
-                recordProgress.setText("Go");
-                startRecording();
-                recordProgress.removeCallbacks(this);
-                count = 3;
-            } else {
-                recordProgress.setBeat(count);
-                count--;
-            }
-        }
-    };
-    //endregion
-
     //region beatIn
     public void startRecordingBeatIn(){
-        recordProgress.setDoHighText(true);
-        recordProgress.doLoop(group);
+        recordProgress.doLoop(group.getMsBarPeriod());
         beatInRunnable = new BeatInRunnable();
         recordProgress.post(beatInRunnable);
     }
@@ -202,7 +182,7 @@ public class Recorder {
 
     //region beat
     void startRecordingBeat(){
-        recordProgress.doLoop(group);
+        recordProgress.doLoop(group.getMsBarPeriod());
         beatRunnable = new BeatRunnable();
         handler.post(beatRunnable);
         startRecording();
@@ -319,7 +299,12 @@ public class Recorder {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        postStop();
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                postStop();
+            }
+        });
     }
 
     private byte[] short2byte(short[] sData) {
@@ -336,17 +321,21 @@ public class Recorder {
         return 500 < System.currentTimeMillis() - recordingStart;
     }
 
-    public void stop(){
+    private boolean shouldDelete;
+
+    /**
+     *
+     * @return true if it recorded anything
+     */
+    public boolean stop(){
         //if the recording did not start, remove the empty audio view. This determines if the audio data will be saved later
-        if(state != State.RECORDING || !isLongEnough()){
-            group.remove(audio.name);
-        }
+        shouldDelete = state != State.RECORDING || !isLongEnough();
 
         handler.removeCallbacks(beatRunnable);
 
         setState(State.ENDING);
 
-        if(recordingThread.isAlive()){
+        if(recordingThread != null && recordingThread.isAlive()){
             try{
                 recordingThread.join();
             } catch(InterruptedException e){
@@ -354,22 +343,21 @@ public class Recorder {
             }
         } else
             postStop();
+
+        return !shouldDelete;
     }
 
     private void postStop(){
-        //if the audio is still in the group
-        if(group.contains(audio)){
+        if(shouldDelete)
+            group.remove(audio.name);
+        else{
             audio.writeMetaData();
             Log.i(TAG, "postStop: preparing to read file");
             audio.readFile();
+            for(Audio audio : group){
+                audio.holder.barTemplateAdapter.stopProgressCallback(recordProgressCallback);
+            }
         }
-
-        for(Audio audio : group){
-            audio.holder.barTemplateAdapter.stopProgressCallback(recordProgressCallback);
-        }
-
-        //recorder.stop();
-        //recorder.release();
 
         audio = null;
         beats = 0;

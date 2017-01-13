@@ -4,6 +4,8 @@ import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.content.Context;
 import android.os.Bundle;
+import android.support.v4.content.ContextCompat;
+import android.support.v4.graphics.drawable.DrawableCompat;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
@@ -103,7 +105,7 @@ public class TracksListFragment extends Fragment {
             }
         });
 
-        ((MainActivity)getActivity()).howToOverlayLayout.tryHelpingView(HowToOverlayLayout.HowToInfo.NEW_TRACK, createNew);
+        HowToOverlay.showHelpIfUnseen(HowToOverlay.HowToInfo.NEW_TRACK, createNew);
 
         return fragView;
     }
@@ -119,7 +121,9 @@ public class TracksListFragment extends Fragment {
         }
 
         void bind(final Track.MetaData trackMeta, final TracksFragmentListener callback){
-            if(!trackMeta.isSetup)
+            if(trackMeta.finished)
+                name.setText(trackMeta.title + " : Complete");
+            else if(!trackMeta.isSetup)
                 name.setText(trackMeta.title + " : Setup");
             else{
                 trackMeta.getCurrentEditor(new Track.MetaData.EditorCallback() {
@@ -134,6 +138,8 @@ public class TracksListFragment extends Fragment {
                 progress.setVisibility(View.VISIBLE);
                 progress.setMax(trackMeta.editors.size());
                 progress.setProgress(trackMeta.currentEditIndex);
+                if(trackMeta.finished)
+                    DrawableCompat.setTint(progress.getProgressDrawable(), ContextCompat.getColor(itemView.getContext(), R.color.primary_light));
             } else
                 progress.setVisibility(View.GONE);
 

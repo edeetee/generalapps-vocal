@@ -31,7 +31,10 @@ public class Effect {
         mName = name;
     }
 
-    private Effect(){}
+    private Effect(){
+        mIcon = android.R.color.transparent;
+        mName = "None";
+    }
 
     public int getCategoryIndex(){
         return EffectCategory.list.indexOf(category);

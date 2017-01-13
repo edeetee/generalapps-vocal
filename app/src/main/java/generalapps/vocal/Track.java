@@ -306,7 +306,7 @@ public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener {
     }
 
     public void setTitle(String title){
-        if(title != this.title){
+        if(!title.equals(this.title)){
             this.title = title;
             updateMetadata();
         }
@@ -394,8 +394,10 @@ public class Track implements Iterable<Audio>, Audio.OnAudioChangeListener {
             String nextEditor = getEditor(currentEditorIndex);
             if(nextEditor != null)
                 VocalNotifications.usersTurnToRecord(key, nextEditor);
-            else
+            else{
                 VocalNotifications.notifyFinished(key, owner);
+                finished = true;
+            }
             updateMetadata();
         }
     }

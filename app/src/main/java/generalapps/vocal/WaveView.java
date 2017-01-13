@@ -34,6 +34,7 @@ public class WaveView extends View {
     Paint wavePaint;
     Paint disabledWavePaint;
     Paint progressPaint;
+    Paint progressTrianglePaint;
     Paint[] barPaint;
     Paint disabledBarPaint;
     Paint barTrianglePaint;
@@ -41,6 +42,7 @@ public class WaveView extends View {
 
     Path wavePath;
     Path wavePathRead;
+    Path progressTriangle;
 
     List<Path> triangles;
     List<Rect> bars;
@@ -67,6 +69,10 @@ public class WaveView extends View {
         progressPaint.setColor(ContextCompat.getColor(getContext(), material.values.R.color.material_color_red_800));
         progressPaint.setStrokeWidth(2.0f);
 
+        progressTrianglePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        progressTrianglePaint.setColor(progressPaint.getColor());
+        progressPaint.setStyle(Paint.Style.FILL);
+
         int[] barColors = new int[]{ContextCompat.getColor(getContext(), R.color.primary), ContextCompat.getColor(getContext(), R.color.primary_dark)};
         barPaint = new Paint[barColors.length];
         for(int i = 0; i < barColors.length; i++){
@@ -82,6 +88,8 @@ public class WaveView extends View {
         beatLinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         beatLinePaint.setColor(ContextCompat.getColor(getContext(), R.color.divider));
         beatLinePaint.setAlpha(100);
+
+        progressTriangle = new Path();
     }
 
     public void setAudio(Audio audio){
@@ -91,7 +99,7 @@ public class WaveView extends View {
     }
 
     public void updateWave(){
-        if(audio != null && audio.waveValues != null && !audio.waveValues.isEmpty() && 0 < audio.group.maxTicks()) {
+        if(audio != null && audio.waveValues != null && !audio.waveValues.isEmpty() && audio.group.first != null && 0 < audio.group.maxTicks()) {
             //Log.d("WaveView", "updateWave() processing");
 
             int w = getWidth();
@@ -215,6 +223,18 @@ public class WaveView extends View {
                 try{
                     float x = w*getProgressCall.call();
                     canvas.drawLine(x, h, x, 0, progressPaint);
+
+                    int triangleSize = 20;
+                    progressTriangle.reset();
+                    progressTriangle.moveTo(x-triangleSize/2, 0);
+                    progressTriangle.lineTo(x, triangleSize/2);
+                    progressTriangle.lineTo(x+triangleSize/2, 0);
+
+                    canvas.drawPath(progressTriangle, progressTrianglePaint);
+                    canvas.rotate(180, x, h/2);
+                    canvas.drawPath(progressTriangle, progressTrianglePaint);
+                    canvas.rotate(180, x, h/2);
+
                     //redraw
                     postInvalidateDelayed(1000/60);
                 } catch(Exception e){

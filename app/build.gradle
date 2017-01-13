@@ -9,8 +9,8 @@ android {
         applicationId "generalapps.vocal"
         minSdkVersion 16
         targetSdkVersion 24
-        versionCode 5
-        versionName "alpha-0.5"
+        versionCode 12
+        versionName "alpha-12"
         multiDexEnabled true
     }
     buildTypes {
@@ -18,7 +18,7 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
-        debug{
+        debug {
             minifyEnabled false
             debuggable true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
@@ -51,6 +51,7 @@ dependencies {
     compile 'blue.aodev:material-values:1.1.0'
     compile 'net.yslibrary.keyboardvisibilityevent:keyboardvisibilityevent:2.0.0'
     compile 'info.hoang8f:android-segmented:1.0.6'
+    compile 'com.getkeepsafe.taptargetview:taptargetview:1.6.0'
     compile 'com.jakewharton:butterknife:8.4.0'
     apt 'com.jakewharton:butterknife-compiler:8.4.0'
 }

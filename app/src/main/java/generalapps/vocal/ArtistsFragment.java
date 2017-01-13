@@ -2,13 +2,9 @@ package generalapps.vocal;
 
 import android.content.res.ColorStateList;
 import android.graphics.Paint;
-import android.graphics.PorterDuff;
-import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
-import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
@@ -18,12 +14,9 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.RadioButton;
 import android.widget.RadioGroup;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -41,6 +34,8 @@ import butterknife.BindView;
 import butterknife.ButterKnife;
 import butterknife.OnClick;
 import info.hoang8f.android.segmented.SegmentedGroup;
+
+import static java.util.Arrays.asList;
 
 /**
  * Created by edeetee on 8/09/2016.
@@ -152,6 +147,7 @@ public class ArtistsFragment extends Fragment {
         mTrack.addOnTrackChangeListener(new Track.OnTrackChangeListener() {
             int lastEditingIndex = mTrack.currentEditorIndex;
             boolean lastIsSetup = mTrack.isSetup();
+            int lastEditorsNum = mTrack.numEditors();
             @Override
             public void OnLoad(Track track) {
 
@@ -255,6 +251,8 @@ public class ArtistsFragment extends Fragment {
                 artistsAdapter.notifyItemRangeChanged(0, artistsAdapter.getItemCount());
             }
         });
+        HowToOverlay.doHelpList(asList(HowToOverlay.HowToInfo.CONTRIBUTORS, HowToOverlay.HowToInfo.ARTIST_SEARCH, HowToOverlay.HowToInfo.PUBLISH),
+                asList(artistsLayout, searcher, ((TrackFragment)getParentFragment()).publishFAB));
 
         return fragView;
     }

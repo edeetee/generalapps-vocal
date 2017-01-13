@@ -49,6 +49,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import be.tarsos.dsp.AudioDispatcher;
 import be.tarsos.dsp.AudioEvent;
 import be.tarsos.dsp.AudioProcessor;
+import be.tarsos.dsp.FadeIn;
 import be.tarsos.dsp.io.TarsosDSPAudioFormat;
 import be.tarsos.dsp.io.TarsosDSPAudioInputStream;
 import be.tarsos.dsp.io.UniversalAudioInputStream;
@@ -98,7 +99,6 @@ public class Audio implements AudioProcessor, ValueEventListener{
     public boolean enabled = true;
 
     public Audio(){
-        //TODO make AudioGroup and Audio constructors linked so that Recorder.FREQ*Rhythm.msMaxPeriod()/1000 can be used for buffer
         state = State.UNLOADED;
         dispatcherLock = new ReentrantLock();
         waveValues = new ArrayList<>();
@@ -146,15 +146,17 @@ public class Audio implements AudioProcessor, ValueEventListener{
             this.effect = effect;
             loadDispatcher();
             writeMetaData();
-            if(effect != Effect.none){
-                Toast toast = Toast.makeText(holder.itemView.getContext(), "Effect selected: " + effect.mName, Toast.LENGTH_SHORT);
-                toast.show();
-            }
+            Toast toast = Toast.makeText(holder.itemView.getContext(), "Effect selected: " + effect.mName, Toast.LENGTH_SHORT);
+            toast.show();
         }
     }
 
+    public double maxMsDelayAbs(){
+        return group.getMsBarPeriod()*.9*barTemplate.mRecordingLength;
+    }
+
     public void setMsDelay(int msDelay){
-        if(Math.abs(msDelay) < group.getMsBarPeriod()*.9){
+        if(Math.abs(msDelay) < maxMsDelayAbs()){
             this.msDelay = msDelay;
             dispatcherLock.lock();
             try{
@@ -169,16 +171,16 @@ public class Audio implements AudioProcessor, ValueEventListener{
     }
 
     public void readMetaData(MetaData meta){
-        boolean changed = meta.isEqual(this);
+        if(!meta.isEqual(this)){
+            name = meta.title;
+            msDelay = meta.msDelay;
 
-        name = meta.title;
-        msDelay = meta.msDelay;
+            barTemplate = BarTemplate.deSerialize(meta);
+            effect = Effect.deSerialize(meta);
 
-        barTemplate = BarTemplate.deSerialize(meta);
-        effect = Effect.deSerialize(meta);
-
-        if(mCallback != null && changed)
-            mCallback.OnChange(this);
+            if(mCallback != null)
+                mCallback.OnChange(this);
+        }
 
         //try read file, will skip if already read
         readFile();
@@ -244,7 +246,6 @@ public class Audio implements AudioProcessor, ValueEventListener{
         }
 
         //upload if doesn't exist or is different size
-        //TODO make it just upload at same point as saving to disk, and do all uploading after offline editing in one place
         audioRef.getMetadata().addOnSuccessListener(new OnSuccessListener<StorageMetadata>() {
             @Override
             public void onSuccess(StorageMetadata storageMetadata) {
@@ -313,6 +314,7 @@ public class Audio implements AudioProcessor, ValueEventListener{
                 effect.mProcessor.Apply(dispatcher, audioBufferSize);
             }
 
+            dispatcher.addAudioProcessor(new CleanStart());
             dispatcher.addAudioProcessor(audioPlayer);
             dispatcher.addAudioProcessor(this);
 
@@ -405,7 +407,13 @@ public class Audio implements AudioProcessor, ValueEventListener{
                 state = State.STOPPED;
                 if(holder != null)
                     holder.itemView.removeCallbacks(delayedStartRunnable);
-                dispatcher.stop();
+                try{
+                    dispatcher.stop();
+                } catch (Exception e){
+                    Log.e(TAG, "stop failed", e);
+                    if(!deleted)
+                        loadDispatcher();
+                }
             }
         } finally{
             dispatcherLock.unlock();
@@ -414,11 +422,15 @@ public class Audio implements AudioProcessor, ValueEventListener{
 
     public void setBarTemplate(BarTemplate barTemplate){
         if(this.barTemplate != barTemplate){
-            if(group.size() == 1){
+            if(group.size() == 1 && this.barTemplate.mRecordingLength != barTemplate.mRecordingLength){
                 setTicks(ticks*this.barTemplate.mRecordingLength/barTemplate.mRecordingLength);
                 holder.barTemplateAdapter.updateWaves();
             }
             this.barTemplate = barTemplate;
+            if(maxMsDelayAbs() < Math.abs(msDelay)){
+                msDelay = (int)Math.round(Math.min(maxMsDelayAbs(), Math.abs(msDelay)) * Math.signum(msDelay));
+                holder.barTemplateAdapter.updateWaves();
+            }
             writeMetaData();
         }
     }
@@ -505,8 +517,8 @@ public class Audio implements AudioProcessor, ValueEventListener{
 
         @Exclude
         boolean isEqual(Audio compare){
-            return !compare.name.equals(title) || compare.msDelay != msDelay || compare.barTemplate.getIndex() != barTemplateIndex ||
-                    effectIndex != compare.effect.getEffectIndex() || effectCategoryIndex != compare.effect.getCategoryIndex();
+            return compare.name.equals(title) && compare.msDelay == msDelay && compare.barTemplate.getIndex() == barTemplateIndex &&
+                    effectIndex == compare.effect.getEffectIndex() && effectCategoryIndex == compare.effect.getCategoryIndex();
         }
     }
 }

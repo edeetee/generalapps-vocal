@@ -41,7 +41,8 @@ public class BarTemplatePagerAdapter extends PagerAdapter implements View.OnClic
     @Override
     public void setPrimaryItem(ViewGroup container, int position, Object object) {
         if(currentWave != object){
-            mAudio.setBarTemplate(BarTemplate.list.get(position));
+            if(currentWave != null)
+                mAudio.setBarTemplate(BarTemplate.list.get(position));
             currentWave = (WaveView)object;
         }
     }

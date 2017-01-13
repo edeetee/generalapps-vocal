@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Handler;
+import android.support.annotation.NonNull;
 import android.support.v4.view.ViewPager;
 import android.support.v4.widget.Space;
 import android.support.v7.widget.CardView;
@@ -17,6 +18,7 @@ import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -42,6 +44,11 @@ import generalapps.vocal.templates.BarTemplatePagerAdapter;
  * Created by edeetee on 13/04/2016.
  */
 interface OnEffectCategoryChangeListener {
+    /**
+     *
+     * @param holder audio holder in question
+     * @return did it consume the change
+     */
     void OnEffectCategoryChanging(RecorderAdapter.AudioHolder holder);
 }
 
@@ -56,7 +63,7 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     Context mContext;
     int bottomSpecialMargin;
 
-    private boolean recordAtEnd;
+    boolean recordAtEnd;
     private boolean stopAtEnd;
 
     OnEffectCategoryChangeListener mEffectCategoryListener;
@@ -86,10 +93,11 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     private ChildEventListener editorsListener = new ChildEventListener() {
         @Override
         public void onChildAdded(DataSnapshot dataSnapshot, String s) {
-            //Track.EditorItem item = dataSnapshot.getValue(Track.EditorItem.class);
+            Track.EditorItem item = dataSnapshot.getValue(Track.EditorItem.class);
 //            if(group.size() <= item.position && item.position+getAdjustOffset() < getSpaceHolderPos() && item.position+getAdjustOffset() < getItemCount()-1)
 //                notifyItemInserted(item.position + getAdjustOffset());
-            notifyDataSetChanged();
+            if(group.size() <= item.position)
+                notifyDataSetChanged();
 //            if(item.position+getAdjustOffset() == getSpaceHolderPos())
 //                notifyItemInserted(item.position + getAdjustOffset());
             //notifyDataSetChanged();
@@ -141,17 +149,24 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         }
     }
 
+    //TODO fix item inserted callbacks
+
     @Override
     public void OnAudioAdd(final int pos) {
-        notifyItemInserted(pos);
+        //remove adjust if exists
+//        if(pos != 0 && adjust != null && adjust.getAdapterPosition() != RecyclerView.NO_POSITION)
+//            notifyItemRemoved(1);
+//
+//        //remove artist thing if exists
+//        if(pos < group.numEditors()-1 && !group.getFreeMode())
+//            notifyItemRemoved(pos+getAdjustOffset());
+//        notifyItemInserted(pos);
+//
+//        //add adjust buttons
+//        if(pos == 0)
+//            notifyItemInserted(1);
 
-        //add adjust buttons
-        if(pos == 0)
-            notifyItemInserted(1);
-
-        //remove artist thing if exists
-        if(pos+2 < getSpaceHolderPos() && !group.getFreeMode())
-            notifyItemRemoved(pos+2);
+        notifyDataSetChanged();
     }
 
     @Override
@@ -166,17 +181,25 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
 
     @Override
     public void OnAudioRemoved(final int pos) {
-        //re-add editor (only if doing editors and is setup)
-        if(!group.getFreeMode() && group.isSetup() && group.size() < group.numEditors())
-            notifyItemInserted(group.size()+1);
 
-        //remove adjust buttons
-        if(pos == 0) {
-            stop();
-            notifyItemRemoved(1);
-        }
+//        //remove adjust buttons
+//        if(pos == 0) {
+//            stop();
+//            notifyItemRemoved(1);
+//        }
+//
+//        notifyItemRemoved(pos);
+//
+//        //add adjust
+//        if(pos == 1 && group.size() == 1){
+//            notifyItemInserted(1);
+//        }
+//
+//        //re-add editor (only if doing editors and is setup)
+//        if(!group.getFreeMode() && group.isSetup() && pos < group.numEditors())
+//            notifyItemInserted(group.size()+getAdjustOffset());
 
-        notifyItemRemoved(pos);
+        notifyDataSetChanged();
     }
 
     @Override
@@ -196,15 +219,23 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         }
     };
 
-    public RecorderAdapter(Context context, RecorderFragment callback){
+    public RecorderAdapter(Context context, RecorderFragment fragment, TrackFragment parentFragment){
         mContext = context;
-        mCallback = callback;
-        mEffectCategoryListener = callback;
-        mEffectListener = callback;
-        mFragment = callback;
+        mCallback = fragment;
+        mEffectCategoryListener = parentFragment;
+        mEffectListener = parentFragment;
+        mFragment = fragment;
     }
 
-    public void play(RecorderCircle recordProgress) {
+    public void setRecordProgress(RecorderCircle recordProgress){
+        this.recordProgress = recordProgress;
+    }
+
+    private RecorderCircle recordProgress;
+
+    int layer = -1;
+
+    public void play() {
         if (playing || getGroupSize() == 0)
             return;
 
@@ -215,6 +246,8 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         startTime = System.currentTimeMillis();
 
         for (int i = 0; i < getGroupSize(); i++) {
+            if(layer < i && group.isFinished())
+                break;
             Audio audio = group.get(i);
             audio.holder.barTemplateAdapter.setProgressCallback(progressCallable);
         }
@@ -222,13 +255,11 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         beats = 0;
 
         playRunnable = new PlayRunnable();
-        playRunnable.recordProgress = recordProgress;
         handler.post(playRunnable);
     }
 
     PlayRunnable playRunnable;
     class PlayRunnable implements Runnable {
-        public RecorderCircle recordProgress;
         @Override
         public void run() {
             if (!playing)
@@ -236,24 +267,29 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             else
                 handler.postDelayed(this, group.msBeatPeriod());
 
-            if(recordAtEnd && beats % Rhythm.maxBeats() == 0){
-                recordAtEnd = false;
-                stop();
-                MainActivity.recorder.startRecordingBeat();
-                return;
+            if(recordAtEnd){
+                recordProgress.setBeat(beats%Rhythm.bpb+1);
+                if(beats % Rhythm.bpb == 0){
+                    recordAtEnd = false;
+                    stop();
+                    MainActivity.recorder.startRecordingBeat();
+                    return;
+                }
             }
-            updateAudios();
-            beats++;
-        }
-    };
 
-    public void updateAudios(){
-        if(getGroupSize() != 0){
-            //update starttime to reset to start when editing first bar length
-            startTime = System.currentTimeMillis()-group.msBeatPeriod()*beats;
-            for(Audio audio : group){
-                audio.beat(beats);
+            if(layer < group.size()-1 && beats % Rhythm.maxBeats() == 0){
+                layer++;
+                group.get(layer).holder.barTemplateAdapter.setProgressCallback(progressCallable);
             }
+
+            startTime = System.currentTimeMillis()-group.msBeatPeriod()*beats;
+            for (int i = 0; i < group.size(); i++) {
+                group.get(i).beat(beats);
+
+                if(group.isFinished() && i == layer)
+                    break;
+            }
+            beats++;
         }
     }
 
@@ -288,6 +324,13 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     public void recordAtEnd(){
         MainActivity.recorder.prepareRecord(group);
         recordAtEnd = true;
+        int barLength = group.getMsBarPeriod();
+        recordProgress.setBeat(beats%Rhythm.bpb);
+        recordProgress.doLoop(barLength, (int)(System.currentTimeMillis() - startTime));
+    }
+
+    public void stopRecordAtEnd(){
+        recordAtEnd = false;
     }
 
     @Override
@@ -300,7 +343,7 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     }
 
     int getAdjustOffset(){
-        return getGroupSize() == 0 ? 0 : 1;
+        return getGroupSize() == 1 ? 1 : 0;
     }
 
     int getEditorsSize(){
@@ -316,16 +359,7 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         return position < getGroupSize() ? group.get(position).name.hashCode() : "adjust".hashCode();
     }
 
-    public void onAdjust(int adjustment){
-        if(getGroupSize() == 1) {
-            group.changeMsBarPeriodMod(adjustment*20);
-            group.first.holder.barTemplateAdapter.updateWaves();
-        } else {
-            Audio last = group.get(getGroupSize()-1);
-            last.setMsDelay(last.msDelay - adjustment*20);
-            last.holder.barTemplateAdapter.updateWaves();
-        }
-    }
+    AdjustHolder adjust;
 
     @Override
     public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
@@ -334,7 +368,8 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             return new AudioHolder(view);
         } else if(viewType == ADJUST_TYPE){
             ViewGroup view = (ViewGroup)MainActivity.context.getLayoutInflater().inflate(R.layout.adjust_buttons, parent, false);
-            return new AdjustHolder(view);
+            adjust = new AdjustHolder(view);
+            return adjust;
         } else if(viewType == EDITOR_TYPE){
             ViewGroup view = (ViewGroup)MainActivity.context.getLayoutInflater().inflate(R.layout.audio_list_editor_view, parent, false);
             return new EditorHolder(view);
@@ -348,7 +383,7 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     public int getItemViewType(int position) {
         if(position < getGroupSize())
             return AUDIO_TYPE;
-        else if(getGroupSize() != 0 && position == getGroupSize())
+        else if(getGroupSize() == 1 && position == 1)
             return ADJUST_TYPE;
         else if(position < getItemCount()-1)
             return EDITOR_TYPE;
@@ -421,99 +456,61 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         }
     }
 
-    class AdjustHolder extends RecyclerView.ViewHolder implements View.OnTouchListener{
-        ImageView leftAdjust;
-        ImageView rightAdjust;
-        long pressStartTime;
+    class AdjustHolder extends RecyclerView.ViewHolder implements AdjustButton.OnAdjustCallback{
+        AdjustButton leftAdjust;
+        AdjustButton rightAdjust;
+        LinearLayout adjustLayout;
 
         public AdjustHolder(View root) {
             super(root);
-            leftAdjust = (ImageView)root.findViewById(R.id.leftAdjust);
-            rightAdjust = (ImageView)root.findViewById(R.id.rightAdjust);
+            leftAdjust = (AdjustButton)root.findViewById(R.id.leftAdjust);
+            rightAdjust = (AdjustButton)root.findViewById(R.id.rightAdjust);
+            adjustLayout = (LinearLayout)root.findViewById(R.id.adjustLayout);
 
-            leftAdjust.setOnTouchListener(this);
-            leftAdjust.setColorFilter(Color.BLACK);
-            rightAdjust.setOnTouchListener(this);
-            rightAdjust.setColorFilter(Color.BLACK);
+            leftAdjust.setOnAdjustCallback(this);
+            rightAdjust.setOnAdjustCallback(this);
         }
 
         @Override
-        public boolean onTouch(View view, MotionEvent motionEvent) {
-            Runnable adjustRunnable = (view.getId() == R.id.leftAdjust) ? adjustLeftRunnable : adjustRightRunnable;
-            if(motionEvent.getAction() == MotionEvent.ACTION_DOWN){
-                pressStartTime = System.currentTimeMillis();
-                handler.post(adjustRunnable);
-                return true;
-            } else if(motionEvent.getAction() == MotionEvent.ACTION_UP || motionEvent.getAction() == MotionEvent.ACTION_CANCEL){
-                handler.removeCallbacks(adjustRunnable);
-                return true;
-            }
-            return false;
-        }
-
-        final int accelMs = 1500;
-        final int adjustStart = 1;
-        final int adjustEnd = 2;
-        final int periodStart = 200;
-        final int periodEnd = 20;
-
-        final Runnable adjustLeftRunnable = new Runnable() {
-            @Override
-            public void run() {
-                onAdjust(getAdjustMod());
-                handler.postDelayed(this, getPeriod());
-            }
-        };
-        final Runnable adjustRightRunnable = new Runnable() {
-            @Override
-            public void run() {
-                onAdjust(-getAdjustMod());
-                handler.postDelayed(this, getPeriod());
-            }
-        };
-
-        int getAdjustMod(){
-            return (int)Math.min(adjustEnd, adjustStart + (adjustEnd-adjustStart)*(System.currentTimeMillis() - pressStartTime)/accelMs);
-        }
-
-        int getPeriod(){
-            Log.i("AdjustHolder", "period: " + (periodEnd-periodStart)*(System.currentTimeMillis() - pressStartTime)/accelMs);
-            return (int)Math.max(periodEnd, periodStart + (periodEnd-periodStart)*(System.currentTimeMillis() - pressStartTime)/accelMs);
+        public void onAdjust(int adjustment) {
+            group.changeMsBarPeriodMod(adjustment*20);
+            group.first.holder.barTemplateAdapter.updateWaves();
         }
     }
 
-    public class AudioHolder extends RecyclerView.ViewHolder implements Bindable, View.OnLongClickListener, View.OnClickListener, EffectAdapter.OnEffectSelectedListener{
+    public class AudioHolder extends RecyclerView.ViewHolder implements Bindable, View.OnLongClickListener, View.OnClickListener, EffectAdapter.OnEffectSelectedListener, AdjustButton.OnAdjustCallback{
 
-        RecyclerView effectCategorySelector;
+        @BindView(R.id.effectCategory) RecyclerView effectCategorySelector;
         EffectCategoryAdapter effectCategoryAdapter;
-        ViewPager barTemplate;
+        @BindView(R.id.barTemplate) ViewPager barTemplate;
         BarTemplatePagerAdapter barTemplateAdapter;
-        CardView card;
+        @BindView(R.id.card_view) CardView card;
         public Audio audio;
-        ViewGroup lowestParent;
-        View space;
-        InvisibleView noneditableCover;
+        @BindView(R.id.lowestParent) ViewGroup lowestParent;
+        @BindView(R.id.effectSpace) View space;
+        @BindView(R.id.blackTint) InvisibleView noneditableCover;
+        @BindView(R.id.leftAdjust) AdjustButton leftAdjust;
+        @BindView(R.id.rightAdjust) AdjustButton rightAdjust;
 
         public AudioHolder(ViewGroup root) {
             super(root);
 
+            ButterKnife.bind(this, root);
+
             root.setOnClickListener(this);
 
-            lowestParent = (ViewGroup)itemView.findViewById(R.id.lowestParent);
-
-            space = itemView.findViewById(R.id.effectSpace);
             space.setOnTouchListener(new View.OnTouchListener() {
                 @Override
                 public boolean onTouch(View v, MotionEvent event) {
-                    if(event.getAction() == MotionEvent.ACTION_DOWN){
+                    if(event.getAction() == MotionEvent.ACTION_DOWN) {
                         v.getParent().requestDisallowInterceptTouchEvent(true);
+                        effectCategorySelector.scrollBy(-(int)mContext.getResources().getDimension(R.dimen.default_item_height)/4, 0);
                         mEffectCategoryListener.OnEffectCategoryChanging(AudioHolder.this);
                     }
                     return effectCategorySelector.onTouchEvent(event);
                 }
             });
 
-            effectCategorySelector = (RecyclerView)itemView.findViewById(R.id.effectCategory);
             effectCategoryAdapter = new EffectCategoryAdapter(itemView.getContext(), this);
             effectCategorySelector.setAdapter(effectCategoryAdapter);
             LinearSnapHelper snapHelper = new LinearSnapHelper(){
@@ -524,37 +521,12 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             };
             snapHelper.attachToRecyclerView(effectCategorySelector);
             effectCategorySelector.setLayoutManager(new LinearLayoutManager(mContext, LinearLayoutManager.HORIZONTAL, false));
-            effectCategorySelector.addOnItemTouchListener(new RecyclerView.OnItemTouchListener() {
-                @Override
-                public boolean onInterceptTouchEvent(RecyclerView rv, MotionEvent e) {
-                    int action = e.getAction();
-                    if(action == MotionEvent.ACTION_DOWN){
-                        mEffectCategoryListener.OnEffectCategoryChanging(AudioHolder.this);
-                    }
-                    else if(action == MotionEvent.ACTION_CANCEL){
-                        Log.i("AHH", "onInterceptTouchEvent: ");
-                        //return true;
-                    }
-                    return false;
-                }
-
-                @Override
-                public void onTouchEvent(RecyclerView rv, MotionEvent e) {
-                    ((RelativeLayout)effectCategorySelector.getParent()).onTouchEvent(e);
-                }
-
-                @Override
-                public void onRequestDisallowInterceptTouchEvent(boolean disallowIntercept) {
-
-                }
-            });
-
-            barTemplate = (ViewPager)itemView.findViewById(R.id.barTemplate);
-            card = (CardView)itemView.findViewById(R.id.card_view);
-            noneditableCover = (InvisibleView)itemView.findViewById(R.id.blackTint);
 
             noneditableCover.setOnClickListener(this);
             card.setOnClickListener(this);
+
+            leftAdjust.setOnAdjustCallback(this);
+            rightAdjust.setOnAdjustCallback(this);
         }
 
         public void bind(){
@@ -565,7 +537,7 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
 
             this.audio = audio;
             barTemplateAdapter = new BarTemplatePagerAdapter(RecorderAdapter.this, this);
-            if(playing)
+            if(playing && (!group.isFinished() || getAdapterPosition() <= layer))
                 barTemplateAdapter.setProgressCallback(progressCallable);
             else
                 barTemplateAdapter.stopProgressCallback(progressCallable);
@@ -586,26 +558,33 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             }
         }
 
+        boolean isHover = false;
         public void setEffectHover(ViewGroup specialFloatGroup){
-            if (specialFloatGroup != null) {
+            isHover = specialFloatGroup != null;
+            if (isHover) {
                 Rect actualItemRect = new Rect();
                 Rect specialFloatGroupRect = new Rect();
                 specialFloatGroup.getGlobalVisibleRect(specialFloatGroupRect);
                 effectCategorySelector.getGlobalVisibleRect(actualItemRect);
 
+                //margins inside whole screen
                 int width = (int)mContext.getResources().getDimension(R.dimen.default_item_height);
-                final RelativeLayout.LayoutParams actualItemMargins = new RelativeLayout.LayoutParams(width, width*5);
-                actualItemMargins.topMargin = actualItemRect.top - specialFloatGroupRect.top;
-                actualItemMargins.leftMargin = actualItemRect.left - specialFloatGroupRect.left;
+                RelativeLayout.LayoutParams specialLayoutMargins = new RelativeLayout.LayoutParams(Math.round(width*1.5f), width*5);
+                specialLayoutMargins.topMargin = actualItemRect.top - specialFloatGroupRect.top;
+                specialLayoutMargins.leftMargin = actualItemRect.left - specialFloatGroupRect.left - width/4;
 
+                effectCategorySelector.setHorizontalFadingEdgeEnabled(true);
+                effectCategorySelector.setFadingEdgeLength(width/4);
+
+                //do the move
                 lowestParent.removeView(effectCategorySelector);
-                specialFloatGroup.addView(effectCategorySelector, actualItemMargins);
+                specialFloatGroup.addView(effectCategorySelector, specialLayoutMargins);
                 effectCategoryAdapter.setShowEffects(true);
             } else{
                 RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams)space.getLayoutParams();
-
                 ((ViewGroup)effectCategorySelector.getParent()).removeView(effectCategorySelector);
                 lowestParent.addView(effectCategorySelector, lowestParent.indexOfChild(space), params);
+                effectCategorySelector.setHorizontalFadingEdgeEnabled(false);
             }
         }
 
@@ -616,13 +595,20 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
 
         @Override
         public void OnEffectSelected(Effect effect) {
+            setEffectHover(null);
+            audio.setEffect(effect);
             effectCategoryAdapter.setShowEffects(false);
             effectCategoryAdapter.setActivated(effect != Effect.none);
-            if(effect == Effect.none)
-                effectCategorySelector.scrollToPosition(EffectCategoryAdapter.MIDDLE);
-            audio.setEffect(effect);
-            setEffectHover(null);
+            effectCategorySelector.scrollToPosition(EffectCategoryAdapter.getMiddleForEffectCategory(audio.effect.category));
             mEffectListener.OnEffectSelected(effect);
+        }
+
+        @Override
+        public void onAdjust(int adjustment) {
+            if(audio == null)
+                return;
+            audio.setMsDelay(audio.msDelay - adjustment*20);
+            audio.holder.barTemplateAdapter.updateWaves();
         }
 
         @Override

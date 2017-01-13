@@ -1,6 +1,7 @@
 package generalapps.vocal;
 
 import android.content.DialogInterface;
+import android.graphics.Color;
 import android.support.v4.app.Fragment;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
@@ -17,6 +18,7 @@ import android.view.MenuInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -26,10 +28,15 @@ import net.yslibrary.android.keyboardvisibilityevent.KeyboardVisibilityEvent;
 import net.yslibrary.android.keyboardvisibilityevent.KeyboardVisibilityEventListener;
 import net.yslibrary.android.keyboardvisibilityevent.util.UIUtil;
 
+import generalapps.vocal.effects.Effect;
+import generalapps.vocal.effects.EffectAdapter;
+
 /**
  * Created by edeetee on 8/09/2016.
  */
-public class TrackFragment extends Fragment implements BackOverrideFragment, Track.OnTrackChangeListener {
+public class TrackFragment extends Fragment implements BackOverrideFragment, Track.OnTrackChangeListener,
+        OnEffectCategoryChangeListener,
+        EffectAdapter.OnEffectSelectedListener {
 
     static final String ITEM_KEY = "track_key";
     static final String TAG = "TrackPagerFragment";
@@ -37,6 +44,8 @@ public class TrackFragment extends Fragment implements BackOverrideFragment, Tra
     static final String ARTIST_FRAGMENT_TAG = "ARTIST_FRAGMENT";
 
     FloatingActionButton publishFAB;
+    ColorView blackTint;
+    RelativeLayout rootLayout;
     Track.MetaData trackMeta;
     Track track;
 
@@ -65,6 +74,11 @@ public class TrackFragment extends Fragment implements BackOverrideFragment, Tra
 
     @Override
     public boolean processBackPressed() {
+        if(effectSelection != null){
+            effectSelection.OnEffectSelected(Effect.none);
+            return false;
+        }
+
         if(getChildFragmentManager().getBackStackEntryCount() != 0){
             getChildFragmentManager().popBackStack();
             return false;
@@ -132,18 +146,33 @@ public class TrackFragment extends Fragment implements BackOverrideFragment, Tra
             @Override
             public void onVisibilityChanged(boolean isOpen) {
                 title.setCursorVisible(isOpen);
+                title.setSelection(title.getText().length());
             }
         });
 
         title.addTextChangedListener(titleWatcher);
 
+
         MainActivity.context.editButton.setVisibility((track != null) ? View.VISIBLE : View.GONE);
         MainActivity.context.editButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                UIUtil.showKeyboard(getContext(), MainActivity.context.title);
+                title.requestFocus();
+                UIUtil.showKeyboard(getContext(), title);
             }
         });
+    }
+
+    @Override
+    public void onDestroyOptionsMenu() {
+        MainActivity.context.editButton.setVisibility(View.GONE);
+        EditText title = MainActivity.context.title;
+        title.removeTextChangedListener(titleWatcher);
+        title.setText("Vocal");
+        title.setFocusable(false);
+        title.setBackground(ContextCompat.getDrawable(MainActivity.context, android.R.color.transparent));
+
+        super.onDestroyOptionsMenu();
     }
 
     TextWatcher titleWatcher = new TextWatcher() {
@@ -161,10 +190,37 @@ public class TrackFragment extends Fragment implements BackOverrideFragment, Tra
         }
     };
 
+    RecorderAdapter.AudioHolder effectSelection;
+
+    @Override
+    public void OnEffectCategoryChanging(RecorderAdapter.AudioHolder holder) {
+        if(effectSelection == null){
+            effectSelection = holder;
+            blackTint.setVisibility(View.VISIBLE);
+            holder.setEffectHover(rootLayout);
+        }
+    }
+
+    @Override
+    public void OnEffectSelected(Effect effect) {
+        effectSelection = null;
+        blackTint.setVisibility(View.INVISIBLE);
+    }
+
     @Nullable
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View fragView = inflater.inflate(R.layout.track_pager_fragment, container, false);
+
+        blackTint = (ColorView)fragView.findViewById(R.id.blackTint);
+        blackTint.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if(effectSelection != null)
+                    effectSelection.OnEffectSelected(Effect.none);
+            }
+        });
+        rootLayout = (RelativeLayout)fragView.findViewById(R.id.rootLayout);
 
         publishFAB = (FloatingActionButton)fragView.findViewById(R.id.FABdone);
         publishFAB.setOnClickListener(new View.OnClickListener() {
@@ -213,16 +269,15 @@ public class TrackFragment extends Fragment implements BackOverrideFragment, Tra
         });
         publishFAB.hide(false);
 
-        RecorderFragment recorderFragment;
-        if(savedInstanceState == null){
+        RecorderFragment recorderFragment = (RecorderFragment)getChildFragmentManager().findFragmentByTag(RECORDER_FRAGMENT_TAG);
+        if(recorderFragment == null){
             recorderFragment = RecorderFragment.newInstance(trackMeta);
             FragmentTransaction transaction = getChildFragmentManager().beginTransaction();
             transaction.add(R.id.trackFragment, recorderFragment, RECORDER_FRAGMENT_TAG);
             transaction.commit();
             track.addOnTrackChangeListener(this);
             recorderFragment.setTrack(track);
-        } else
-            recorderFragment = (RecorderFragment)getChildFragmentManager().findFragmentByTag(RECORDER_FRAGMENT_TAG);
+        }
 
         return fragView;
     }
@@ -232,12 +287,5 @@ public class TrackFragment extends Fragment implements BackOverrideFragment, Tra
         super.onDestroy();
         if(track != null)
             track.cleanup();
-
-        MainActivity.context.editButton.setVisibility(View.GONE);
-        EditText title = MainActivity.context.title;
-        title.removeTextChangedListener(titleWatcher);
-        title.setText("Vocal");
-        title.setFocusable(false);
-        title.setBackground(ContextCompat.getDrawable(getContext(), android.R.color.transparent));
     }
 }

@@ -32,12 +32,36 @@
                 android:layout_width="@dimen/default_item_height"
                 android:layout_height="@dimen/default_item_height" />
 
+            <generalapps.vocal.AdjustButton
+                android:layout_toLeftOf="@id/effectSpace"
+                android:id="@+id/rightAdjust"
+                android:layout_centerVertical="true"
+                android:layout_width="@dimen/default_item_height"
+                android:layout_height="@dimen/default_item_height"
+                android:layout_marginRight="-10dp"
+                android:layout_marginLeft="-10dp"
+                android:background="@drawable/adjust_button"/>
+
             <android.support.v4.view.ViewPager
+                android:clickable="false"
+                android:longClickable="false"
+                android:contextClickable="false"
                 android:id="@+id/barTemplate"
                 android:layout_width="0dp"
-                android:layout_alignParentLeft="true"
-                android:layout_toLeftOf="@id/effectSpace"
+                android:layout_toRightOf="@id/leftAdjust"
+                android:layout_toLeftOf="@id/rightAdjust"
                 android:layout_height="match_parent"/>
+
+            <generalapps.vocal.AdjustButton
+                android:layout_alignParentLeft="true"
+                android:layout_centerVertical="true"
+                android:id="@+id/leftAdjust"
+                android:layout_width="@dimen/default_item_height"
+                android:layout_height="@dimen/default_item_height"
+                android:background="@drawable/adjust_button"
+                android:layout_marginRight="-10dp"
+                android:layout_marginLeft="-10dp"
+                android:scaleX="-1"/>
         </RelativeLayout>
         <generalapps.vocal.InvisibleView
             android:id="@+id/blackTint"

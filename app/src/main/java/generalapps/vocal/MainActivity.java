@@ -53,7 +53,6 @@ public class MainActivity extends AppCompatActivity implements TracksListFragmen
     static String MAIN_FRAGMENT_TAG = "MAIN_FRAGMENT_TAG";
     static int RC_SIGN_IN = 10231;
 
-    HowToOverlayLayout howToOverlayLayout;
     Toolbar toolBar;
     EditText title;
     ImageView editButton;
@@ -61,12 +60,13 @@ public class MainActivity extends AppCompatActivity implements TracksListFragmen
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        init();
+        permissions();
     }
 
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-        recorder.initRecorder();
+        recorder.onSharedPreferenceChanged(sharedPreferences, key);
+        HowToOverlay.onSharedPreferenceChanged(sharedPreferences, key);
     }
 
     String trackToLoad;
@@ -97,9 +97,14 @@ public class MainActivity extends AppCompatActivity implements TracksListFragmen
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main_activity);
 
-        isReloading = savedInstanceState != null;
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread t, Throwable e) {
+                Log.e("MainActivity", "UncaughtException", e);
+            }
+        });
 
-        howToOverlayLayout = (HowToOverlayLayout)findViewById(R.id.howToOverlay);
+        isReloading = savedInstanceState != null;
 
         toolBar = (Toolbar) findViewById(R.id.my_toolbar);
         editButton = (ImageView)toolBar.findViewById(R.id.editTitle);
@@ -110,24 +115,30 @@ public class MainActivity extends AppCompatActivity implements TracksListFragmen
         if(getIntent().getExtras() != null)
             doIntentExtras(getIntent().getExtras());
 
-        //check permissions
-        List<String> permissions = new ArrayList<>(Arrays.asList(android.Manifest.permission.RECORD_AUDIO, Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.VIBRATE));
-        for (int i = 0; i < permissions.size(); i++)
-            if(ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
-                permissions.remove(i);
-
-
-        if(permissions.size() == 0)
-            init();
-        else
-            ActivityCompat.requestPermissions(this, permissions.toArray(new String[0]), 1);
-
         storage = FirebaseStorage.getInstance();
         messaging = FirebaseMessaging.getInstance();
         database = FirebaseDatabase.getInstance();
         storageRef = MainActivity.storage.getReferenceFromUrl("gs://vocal-d80ba.appspot.com/");
         auth = FirebaseAuth.getInstance();
         fragManager = getSupportFragmentManager();
+
+        //check permissions
+        permissions();
+    }
+
+    void permissions(){
+        List<String> permissions = new ArrayList<>(Arrays.asList(android.Manifest.permission.RECORD_AUDIO, Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.VIBRATE));
+        for (int i = 0; i < permissions.size(); i++)
+            if(ContextCompat.checkSelfPermission(this, permissions.get(i)) == PackageManager.PERMISSION_GRANTED){
+                permissions.remove(i);
+                i--;
+            }
+
+
+        if(permissions.size() == 0)
+            init();
+        else
+            ActivityCompat.requestPermissions(this, permissions.toArray(new String[0]), 1);
     }
 
     void init(){
@@ -137,7 +148,7 @@ public class MainActivity extends AppCompatActivity implements TracksListFragmen
 
         if(!isReloading){
             try{
-                FirebaseDatabase.getInstance().setPersistenceEnabled(true);
+                database.setPersistenceEnabled(true);
             } catch(DatabaseException e){
                 Log.w("MainActivity", "setPersistenceEnabled Failed");
             }
@@ -234,11 +245,6 @@ public class MainActivity extends AppCompatActivity implements TracksListFragmen
 
     @Override
     public void onBackPressed() {
-        if(howToOverlayLayout.isOn()){
-            howToOverlayLayout.clear();
-            return;
-        }
-
         try{
             BackOverrideFragment curRecorder = (BackOverrideFragment)getSupportFragmentManager().findFragmentByTag(MAIN_FRAGMENT_TAG);
             if(curRecorder != null && curRecorder.processBackPressed())

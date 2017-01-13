@@ -3,6 +3,7 @@ package generalapps.vocal;
 import android.content.Context;
 import android.support.annotation.Nullable;
 import android.support.v4.graphics.ColorUtils;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.LogPrinter;
 import android.view.View;
@@ -140,5 +141,10 @@ public class Utils {
     static LinearLayout.LayoutParams setWeight(LinearLayout.LayoutParams input, int weight){
         input.weight = weight;
         return input;
+    }
+
+    static int pxToDp(Context context, int px) {
+        DisplayMetrics displayMetrics = context.getResources().getDisplayMetrics();
+        return Math.round(px / (displayMetrics.xdpi / DisplayMetrics.DENSITY_DEFAULT));
     }
 }

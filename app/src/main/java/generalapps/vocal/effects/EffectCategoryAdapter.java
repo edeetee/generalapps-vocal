@@ -1,13 +1,19 @@
 package generalapps.vocal.effects;
 
 import android.content.Context;
+import android.graphics.PorterDuff;
+import android.graphics.drawable.Drawable;
+import android.support.v4.content.ContextCompat;
+import android.support.v4.graphics.drawable.DrawableCompat;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 
 import generalapps.vocal.Audio;
+import generalapps.vocal.MainActivity;
 import generalapps.vocal.R;
 import generalapps.vocal.SnappingListView;
 
@@ -75,13 +81,26 @@ public class EffectCategoryAdapter extends RecyclerView.Adapter<EffectCategoryAd
             int width = (int)mContext.getResources().getDimension(R.dimen.default_item_height);
             layout.addView(imageView, new RecyclerView.LayoutParams(width, width));
             effectsListView = new SnappingListView(mContext);
-            layout.addView(effectsListView, new RecyclerView.LayoutParams(width, width*5));
+            layout.addView(effectsListView, new RecyclerView.LayoutParams(width, width*4));
         }
 
         public void bind(){
             final EffectCategory category = EffectCategory.list.get(getAdapterPosition() % EffectCategory.list.size());
-            imageView.setImageResource(category.mIconId);
-            if(mShowEffects && category != EffectCategory.none){
+            Drawable categoryIcon = ContextCompat.getDrawable(itemView.getContext(), category.mIconId);
+            DrawableCompat.setTint(categoryIcon, ContextCompat.getColor(itemView.getContext(), android.R.color.white));
+            imageView.setImageDrawable(categoryIcon);
+
+            if(category == EffectCategory.filters)
+                Log.i("EFFCATAD", "bind: filters");
+
+            if(category == EffectCategory.none)
+                itemView.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        mListener.OnEffectSelected(Effect.none);
+                    }
+                });
+            if(mShowEffects){
                 EffectAdapter adapter = new EffectAdapter(mContext, mListener, category);
                 effectsListView.setAdapter(adapter);
                 effectsListView.setVisibility(View.VISIBLE);
