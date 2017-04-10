@@ -182,11 +182,11 @@ public class RecorderAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     @Override
     public void OnAudioRemoved(final int pos) {
 
-//        //remove adjust buttons
-//        if(pos == 0) {
-//            stop();
-//            notifyItemRemoved(1);
-//        }
+        //remove adjust buttons
+        if(getGroupSize() == 0) {
+            stop();
+            //notifyItemRemoved(1);
+        }
 //
 //        notifyItemRemoved(pos);
 //

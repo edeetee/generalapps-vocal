@@ -9,8 +9,8 @@ android {
         applicationId "generalapps.vocal"
         minSdkVersion 16
         targetSdkVersion 24
-        versionCode 12
-        versionName "alpha-12"
+        versionCode 14
+        versionName "alpha-14"
         multiDexEnabled true
     }
     buildTypes {
