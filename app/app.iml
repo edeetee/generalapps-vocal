@@ -106,14 +106,11 @@
     </content>
     <orderEntry type="jdk" jdkName="Android API 25 Platform" jdkType="Android SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" exported="" name="support-v4-24.2.1" level="project" />
-    <orderEntry type="library" exported="" name="support-compat-24.2.1" level="project" />
-    <orderEntry type="library" exported="" name="support-fragment-24.2.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-base-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="firebase-database-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-tagmanager-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-location-9.6.1" level="project" />
-    <orderEntry type="library" exported="" name="palette-v7-24.0.0" level="project" />
+    <orderEntry type="library" exported="" name="transition-25.3.1" level="project" />
     <orderEntry type="library" exported="" name="firebase-database-connection-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-panorama-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="taptargetview-1.6.0" level="project" />
@@ -126,73 +123,77 @@
     <orderEntry type="library" exported="" name="bolts-android-1.4.0" level="project" />
     <orderEntry type="library" exported="" name="firebase-iid-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-vision-9.6.1" level="project" />
-    <orderEntry type="library" exported="" name="cardview-v7-24.2.1" level="project" />
     <orderEntry type="library" exported="" name="firebase-storage-9.6.1" level="project" />
-    <orderEntry type="library" exported="" name="design-24.2.1" level="project" />
     <orderEntry type="library" exported="" scope="TEST" name="multidex-instrumentation-1.0.1" level="project" />
-    <orderEntry type="library" exported="" name="preference-v14-24.2.1" level="project" />
     <orderEntry type="library" exported="" name="firebase-auth-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-games-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-gass-9.6.1" level="project" />
-    <orderEntry type="library" exported="" name="support-core-ui-24.2.1" level="project" />
-    <orderEntry type="library" exported="" name="recyclerview-v7-24.2.1" level="project" />
     <orderEntry type="library" exported="" name="firebase-messaging-9.6.1" level="project" />
-    <orderEntry type="library" exported="" name="appcompat-v7-24.2.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-cast-framework-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-ads-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-cast-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="firebase-config-9.6.1" level="project" />
+    <orderEntry type="library" exported="" name="mediarouter-v7-25.3.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-tasks-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="fab-1.6.4" level="project" />
     <orderEntry type="library" exported="" name="play-services-ads-lite-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-awareness-9.6.1" level="project" />
+    <orderEntry type="library" exported="" name="support-v4-25.3.1" level="project" />
+    <orderEntry type="library" exported="" name="support-media-compat-25.3.1" level="project" />
     <orderEntry type="library" exported="" name="android-segmented-1.0.6" level="project" />
     <orderEntry type="library" exported="" name="TarsosDSP-Android-2.3" level="project" />
     <orderEntry type="library" exported="" name="bolts-applinks-1.4.0" level="project" />
     <orderEntry type="library" exported="" name="play-services-auth-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="butterknife-annotations-8.4.0" level="project" />
-    <orderEntry type="library" exported="" name="customtabs-23.4.0" level="project" />
     <orderEntry type="library" exported="" name="butterknife-8.4.0" level="project" />
+    <orderEntry type="library" exported="" name="support-annotations-25.3.1" level="project" />
+    <orderEntry type="library" exported="" name="support-vector-drawable-25.3.1" level="project" />
+    <orderEntry type="library" exported="" name="preference-v7-25.3.1.1" level="project" />
+    <orderEntry type="library" exported="" name="support-compat-25.3.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-analytics-impl-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-gcm-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-appinvite-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="okio-1.9.0" level="project" />
-    <orderEntry type="library" exported="" name="animated-vector-drawable-24.2.1" level="project" />
-    <orderEntry type="library" exported="" name="preference-v7-24.2.1.0" level="project" />
     <orderEntry type="library" exported="" name="play-services-plus-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="firebase-analytics-impl-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-nearby-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="library-19.0.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-appindexing-9.6.1" level="project" />
+    <orderEntry type="library" exported="" name="design-25.3.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-fitness-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="bolts-tasks-1.4.0" level="project" />
+    <orderEntry type="library" exported="" name="support-core-ui-25.3.1" level="project" />
+    <orderEntry type="library" exported="" name="cardview-v7-25.3.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-instantapps-9.6.1" level="project" />
+    <orderEntry type="library" exported="" name="customtabs-25.3.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-identity-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="firebase-ui-auth-0.6.1" level="project" />
     <orderEntry type="library" exported="" name="firebase-core-9.6.1" level="project" />
-    <orderEntry type="library" exported="" name="preference-v7-24.2.1" level="project" />
+    <orderEntry type="library" exported="" name="palette-v7-25.3.1" level="project" />
+    <orderEntry type="library" exported="" name="support-core-utils-25.3.1" level="project" />
+    <orderEntry type="library" exported="" name="support-fragment-25.3.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-maps-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="firebase-storage-common-9.6.1" level="project" />
-    <orderEntry type="library" exported="" name="support-media-compat-24.2.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-analytics-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-iid-9.6.1" level="project" />
+    <orderEntry type="library" exported="" name="preference-v7-25.3.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-auth-base-9.6.1" level="project" />
-    <orderEntry type="library" exported="" name="support-vector-drawable-24.2.1" level="project" />
-    <orderEntry type="library" exported="" name="support-core-utils-24.2.1" level="project" />
     <orderEntry type="library" exported="" name="facebook-android-sdk-4.14.1" level="project" />
+    <orderEntry type="library" exported="" name="preference-v14-25.3.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-basement-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="firebase-auth-common-9.6.1" level="project" />
-    <orderEntry type="library" exported="" name="support-annotations-24.2.1" level="project" />
     <orderEntry type="library" exported="" name="firebase-auth-module-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="multidex-1.0.1" level="project" />
     <orderEntry type="library" exported="" name="okhttp-3.4.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-clearcut-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-safetynet-9.6.1" level="project" />
     <orderEntry type="library" exported="" name="play-services-places-9.6.1" level="project" />
+    <orderEntry type="library" exported="" name="recyclerview-v7-25.3.1" level="project" />
     <orderEntry type="library" exported="" name="firebase-analytics-9.6.1" level="project" />
-    <orderEntry type="library" exported="" name="mediarouter-v7-24.0.0" level="project" />
+    <orderEntry type="library" exported="" name="appcompat-v7-25.3.1" level="project" />
     <orderEntry type="library" exported="" name="android-async-http-1.4.9" level="project" />
+    <orderEntry type="library" exported="" name="animated-vector-drawable-25.3.1" level="project" />
     <orderEntry type="library" exported="" name="material-values-1.1.0" level="project" />
     <orderEntry type="library" exported="" name="firebase-crash-9.6.1" level="project" />
   </component>
